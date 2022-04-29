@@ -11,6 +11,10 @@ func (f Friendship) Validate() error {
 		return Errorf(EINVALID, "nil pointer")
 	}
 
+	if err := f.P1.Validate(); err != nil {
+		return WrapError(err, EINVALID, "friendship required a valid person")
+	}
+
 	if len(f.With) == 0 {
 		return Errorf(EINVALID, "at least one person is required")
 	}
