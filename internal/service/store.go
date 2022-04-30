@@ -6,7 +6,7 @@ import (
 	"github.com/Lambels/relationer/internal"
 )
 
-type PostgreStore interface {
+type Store interface {
 	AddPerson(context.Context, *internal.Person) error
 
 	AddFriendship(context.Context, internal.Friendship) error
@@ -17,7 +17,7 @@ type PostgreStore interface {
 }
 
 type GraphStore interface {
-	PostgreStore
+	Store
 
 	GetDepth(context.Context, int64, int64) (int, error)
 }
