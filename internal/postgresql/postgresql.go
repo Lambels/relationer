@@ -38,6 +38,11 @@ func (db *DB) Open() (err error) {
 		return err
 	}
 
+	// check db with ping.
+	if err := db.db.Ping(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
