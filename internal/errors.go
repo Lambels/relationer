@@ -1,13 +1,16 @@
 package internal
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
-// ErrorCode represents an error code in the system.
-type ErrorCode uint
+// ECode represents an error code in the system.
+type ECode uint
 
 // Error codes which map good to http errors.
 const (
-	ECONFLICT ErrorCode = iota
+	ECONFLICT ECode = iota + 1
 	EINTERNAL
 	EINVALID
 	ENOTFOUND
@@ -22,11 +25,11 @@ type Error struct {
 	message string
 
 	// code is a machine readable code.
-	code ErrorCode
+	code ECode
 }
 
 // WrapError wraps the origin error in the Error type with the formated new error.
-func WrapError(origin error, code ErrorCode, format string, a ...interface{}) error {
+func WrapError(origin error, code ECode, format string, a ...interface{}) error {
 	return &Error{
 		origin:  origin,
 		message: fmt.Sprintf(format, a...),
@@ -35,7 +38,7 @@ func WrapError(origin error, code ErrorCode, format string, a ...interface{}) er
 }
 
 // Errorf formats a new error.
-func Errorf(code ErrorCode, formant string, a ...interface{}) error {
+func Errorf(code ECode, formant string, a ...interface{}) error {
 	return WrapError(nil, code, formant, a...)
 }
 
@@ -49,12 +52,29 @@ func (e *Error) Error() string {
 	return e.message
 }
 
+// ErrorCode is a helper function to get the code for any error.
+//
+// if error nil: returns 0
+//
+// if error not of type internal.Error: EINTERNAL
+//
+// if error of type internal.Error: code of error
+func ErrorCode(err error) ECode {
+	var e *Error
+	if err == nil {
+		return 0
+	} else if errors.As(err, &e) {
+		return e.Code()
+	}
+	return EINTERNAL
+}
+
 // Unwrap returns the original error.
 func (e *Error) Unwrap() error {
 	return e.origin
 }
 
 // Code returns the error code under the error.
-func (e *Error) Code() ErrorCode {
+func (e *Error) Code() ECode {
 	return e.code
 }
