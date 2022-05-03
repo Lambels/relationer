@@ -13,9 +13,9 @@ type Store interface {
 
 	RemovePerson(context.Context, int64) error
 
-	AddFriendship(context.Context, internal.Friendship) error
-
 	GetPerson(context.Context, int64) (*internal.Person, error)
+
+	AddFriendship(context.Context, internal.Friendship) error
 }
 
 // GraphStore is a bi-directional graph ds representing
