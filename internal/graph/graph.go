@@ -2,7 +2,6 @@ package graph
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"sync"
 
@@ -34,8 +33,8 @@ func NewGraphStore() *GraphStoreService {
 // Load, syncs the store with the database.
 //
 // should only be used once after initialization.
-func (s *GraphStoreService) Load(db *sql.DB) error {
-	if s == nil {
+func (s *GraphStoreService) Load() error {
+	if s == nil || s.repo == nil {
 		return errors.New("store isnt initialized")
 	}
 
@@ -55,9 +54,7 @@ func (s *GraphStoreService) AddPerson(ctx context.Context, person *internal.Pers
 		return err
 	}
 
-	s.mu.Lock()
 	s.addPerson(person)
-	s.mu.Unlock()
 	return nil
 }
 
@@ -67,40 +64,34 @@ func (s *GraphStoreService) AddFriendship(ctx context.Context, friendship intern
 	}
 
 	// possibly skip table scan.
-	s.mu.RLock()
 	if depth := s.getDepth(friendship.P1.ID, friendship.With[0].ID); depth != -1 {
 		return internal.Errorf(internal.ECONFLICT, "%v and %v are already friends", friendship.P1, friendship.With[0])
 	}
-	s.mu.RUnlock()
 
 	if err := s.repo.AddFriendship(ctx, friendship); err != nil {
 		return err
 	}
 
-	s.mu.Lock()
 	s.addFriendship(friendship.P1, friendship.With[0])
-	s.mu.Unlock()
 	return nil
 }
 
 func (s *GraphStoreService) RemovePerson(ctx context.Context, id int64) error {
-	s.mu.RLock()
 	if _, err := s.getPerson(id); err != nil {
 		return err
 	}
-	s.mu.RUnlock()
 
 	if err := s.repo.RemovePerson(ctx, id); err != nil {
 		return err
 	}
 
-	s.mu.Lock()
+	s.mu.RLock()
 	friends := s.edges[id]
+	s.mu.RUnlock()
 	for _, friend := range friends {
 		s.removeFriendship(id, friend.ID) // unlink everyone linked with current person.
 	}
 	s.removePerson(id)
-	s.mu.Unlock()
 	return nil
 }
 
@@ -121,15 +112,53 @@ func (s *GraphStoreService) GetFriendship(ctx context.Context, id int64) (intern
 }
 
 func (s *GraphStoreService) addPerson(p *internal.Person) {
+	s.mu.Lock()
 	s.nodes = append(s.nodes, p)
+	s.mu.Unlock()
 }
 
 func (s *GraphStoreService) addFriendship(p1, p2 *internal.Person) {
-
+	s.mu.Lock()
+	s.mu.Unlock()
 }
 
-func (s *GraphStoreService) getDepth(first, second int64) int {
+func (s *GraphStoreService) getDepth(first, target int64) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
+	_, ok1 := s.edges[first]
+	_, ok2 := s.edges[target]
+	if ok1 != true || ok2 != true {
+		return -1
+	}
+
+	queue := make([]int64, 0)
+	visited := make(map[int64]bool)
+	queue = append(queue, first) // start from first and look for target.
+
+	var count int
+	for {
+		if len(queue) == 0 {
+			return -1
+		}
+
+		currID := queue[0]      // seek first item in queue.
+		queue = queue[1:]       // dequeue first item in queue.
+		visited[currID] = true  // mark id as visited.
+		near := s.edges[currID] // get near nodes for enqueueing.
+
+		for i := 0; i < len(near); i++ {
+			j := near[i]
+			if !visited[j.ID] {
+				queue = append(queue, j.ID)
+			}
+		}
+
+		count++
+		if currID == target {
+			return count
+		}
+	}
 }
 
 func (s *GraphStoreService) getPerson(id int64) (*internal.Person, error) {
@@ -137,9 +166,12 @@ func (s *GraphStoreService) getPerson(id int64) (*internal.Person, error) {
 }
 
 func (s *GraphStoreService) removeFriendship(p1, p2 int64) {
+	s.mu.Lock()
+	s.mu.Unlock()
 
 }
 
 func (s *GraphStoreService) removePerson(id int64) {
-
+	s.mu.RLock()
+	s.mu.RUnlock()
 }
