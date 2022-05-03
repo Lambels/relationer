@@ -3,6 +3,7 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"net/http"
 )
 
 // ECode represents an error code in the system.
@@ -15,6 +16,13 @@ const (
 	EINVALID
 	ENOTFOUND
 )
+
+var codes = map[ECode]int{
+	ECONFLICT: http.StatusConflict,
+	EINVALID:  http.StatusBadRequest,
+	ENOTFOUND: http.StatusNotFound,
+	EINTERNAL: http.StatusInternalServerError,
+}
 
 // Error represents an internal error which implements the error interface.
 type Error struct {
@@ -65,6 +73,18 @@ func ErrorCode(err error) ECode {
 		return 0
 	} else if errors.As(err, &e) {
 		return e.Code()
+	}
+	return EINTERNAL
+}
+
+// ECodeFromStatusCode is a helper function to map a http status code to a error
+//
+// if code not found: returns EINTERNAL
+func ECodeFromStatusCode(code int) ECode {
+	for k, v := range codes {
+		if v == code {
+			return k
+		}
 	}
 	return EINTERNAL
 }
