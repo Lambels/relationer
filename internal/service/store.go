@@ -11,11 +11,11 @@ import (
 type Store interface {
 	AddPerson(context.Context, *internal.Person) error
 
+	AddFriendship(context.Context, internal.Friendship) error
+
 	RemovePerson(context.Context, int64) error
 
-	GetPerson(context.Context, int64) (*internal.Person, error)
-
-	AddFriendship(context.Context, internal.Friendship) error
+	UpdateCache(context.Context, int64, interface{}) error
 }
 
 // GraphStore is a bi-directional graph ds representing
@@ -29,4 +29,6 @@ type GraphStore interface {
 	GetDepth(context.Context, int64, int64) (int, error)
 
 	GetFriendship(context.Context, int64) (internal.Friendship, error)
+
+	GetPerson(context.Context, int64) (*internal.Person, error)
 }
