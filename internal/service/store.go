@@ -14,8 +14,6 @@ type Store interface {
 	AddFriendship(context.Context, internal.Friendship) error
 
 	RemovePerson(context.Context, int64) error
-
-	UpdateCache(context.Context, int64, interface{}) error
 }
 
 // GraphStore is a bi-directional graph ds representing
