@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 
@@ -49,12 +50,62 @@ func (c *Client) AddPerson(ctx context.Context, person *internal.Person) error {
 	return nil
 }
 
-func (c *Client) RemovePerson(context.Context, int64) error {
+func (c *Client) RemovePerson(ctx context.Context, id int64) error {
+	var buf *bytes.Buffer
+	if err := json.NewEncoder(buf).Encode(rest.RemovePersonRequest{Id: id}); err != nil {
+		return err
+	}
 
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodDelete,
+		c.URL+"/person/"+fmt.Sprint(id),
+		buf,
+	)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-type", "application/json")
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return err
+	} else if resp.StatusCode != http.StatusCreated {
+		return parseRespErr(resp)
+	}
+	resp.Body.Close()
+	return nil
 }
 
-func (c *Client) GetPerson(context.Context, int64) (*internal.Person, error) {
+func (c *Client) GetPerson(ctx context.Context, id int64) (*internal.Person, error) {
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		c.URL+"/person/"+fmt.Sprint(id),
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
 
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, err
+	} else if resp.StatusCode != http.StatusCreated {
+		return nil, parseRespErr(resp)
+	}
+	defer resp.Body.Close()
+
+	var person internal.Person
+	if err := json.NewDecoder(resp.Body).Decode(&person); err != nil {
+		return nil, err
+	}
+
+	return &person, nil
 }
 
 func (c *Client) AddFriendship(context.Context, internal.Friendship) error {
