@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/Lambels/relationer/internal"
 	"github.com/Lambels/relationer/internal/service"
@@ -13,8 +15,9 @@ import (
 // Store is a bi-directional graph ds representing
 // relation-ships between people.
 type GraphStoreService struct {
-	repo service.Store
-	db   *sql.DB
+	repo  service.Store
+	cache service.Cache
+	db    *sql.DB
 
 	// graph properties.
 	nodes []*internal.Person
@@ -72,7 +75,7 @@ func (s *GraphStoreService) AddFriendship(ctx context.Context, friendship intern
 	}
 
 	// possibly skip table scan.
-	if depth := s.getDepth(friendship.P1.ID, friendship.With[0].ID); depth != -1 {
+	if _, err := s.getDepth(ctx, friendship.P1.ID, friendship.With[0].ID); err != nil {
 		return internal.Errorf(internal.ECONFLICT, "%v and %v are already friends", friendship.P1, friendship.With[0])
 	}
 
@@ -111,10 +114,6 @@ func (s *GraphStoreService) GetPerson(ctx context.Context, id int64) (*internal.
 		return nil, err
 	}
 
-	if err := s.repo.UpdateCache(ctx, id, person); err != nil {
-		return nil, err
-	}
-
 	return person, nil
 }
 
@@ -122,12 +121,57 @@ func (s *GraphStoreService) GetPerson(ctx context.Context, id int64) (*internal.
 // id will be -1.
 //
 // returns ENOTFOUND if one of the people arent found.
-func (s *GraphStoreService) GetDepth(_ context.Context, first, second int64) (int, error) {
+func (s *GraphStoreService) GetDepth(ctx context.Context, first, second int64) (int, error) {
+	var res int
 
+	// check cache. (1)
+	if err := s.cache.Get(ctx, fmt.Sprintf("D%v%v", first, second), &res); err == nil {
+		return res, nil
+	}
+	// check cache. (2)
+	if err := s.cache.Get(ctx, fmt.Sprintf("D%v%v", second, first), &res); err == nil {
+		return res, nil
+	}
+
+	// fetch depth.
+	depth, err := s.getDepth(ctx, first, second)
+	if err != nil {
+		return depth, err
+	}
+
+	if err := s.cache.Set(ctx, fmt.Sprintf("D%v%v", first, second), depth, 5*time.Minute); err != nil {
+		return depth, internal.WrapError(err, internal.EINTERNAL, "error while tring to set cache") // wrap error easy to check for cache error.
+	}
+
+	return depth, nil
 }
 
-func (s *GraphStoreService) GetFriendship(_ context.Context, id int64) (internal.Friendship, error) {
+func (s *GraphStoreService) GetFriendship(ctx context.Context, id int64) (internal.Friendship, error) {
+	var res internal.Friendship
 
+	// search cache.
+	if err := s.cache.Get(ctx, fmt.Sprintf("F%v", id), &res); err == nil {
+		return res, nil
+	}
+
+	pers, err := s.getPerson(id)
+	if err != nil {
+		return res, err
+	}
+
+	s.mu.RLock()
+	friends := s.edges[pers.ID]
+	s.mu.RUnlock()
+
+	res.P1 = pers
+	res.With = friends
+
+	// set cache.
+	if err := s.cache.Set(ctx, fmt.Sprintf("F%v", id), res, 5*time.Second); err != nil {
+		return res, internal.WrapError(err, internal.EINTERNAL, "error while tring to set cache") // wrap error easy to check for cache error.
+	}
+
+	return res, nil
 }
 
 func (s *GraphStoreService) addPerson(p *internal.Person) {
@@ -138,14 +182,14 @@ func (s *GraphStoreService) addFriendship(p1, p2 *internal.Person) {
 	s.edges[p1.ID] = append(s.edges[p1.ID], p2)
 }
 
-func (s *GraphStoreService) getDepth(first, target int64) int {
+func (s *GraphStoreService) getDepth(ctx context.Context, first, target int64) (int, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	_, ok1 := s.edges[first]
 	_, ok2 := s.edges[target]
 	if ok1 != true || ok2 != true {
-		return -1
+		return -1, internal.Errorf(internal.ENOTFOUND, "one of the ids provided doesent exist")
 	}
 
 	queue := make([]int64, 0)
@@ -154,8 +198,15 @@ func (s *GraphStoreService) getDepth(first, target int64) int {
 
 	var count int
 	for {
+		select {
+		case <-ctx.Done():
+			return -1, ctx.Err()
+
+		default:
+		}
+
 		if len(queue) == 0 {
-			return -1
+			return -1, internal.Errorf(internal.ENOTFOUND, "target wasnt found in any relationship connection")
 		}
 
 		currID := queue[0]      // seek first item in queue.
@@ -172,7 +223,7 @@ func (s *GraphStoreService) getDepth(first, target int64) int {
 
 		count++
 		if currID == target {
-			return count
+			return count, nil
 		}
 	}
 }
