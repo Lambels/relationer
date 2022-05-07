@@ -12,6 +12,7 @@ import (
 	"github.com/Lambels/relationer/internal/rest"
 )
 
+// Client is an http client which implements the internal.GraphStore
 type Client struct {
 	http.Client
 
@@ -72,7 +73,7 @@ func (c *Client) RemovePerson(ctx context.Context, id int64) error {
 	resp, err := c.Do(req)
 	if err != nil {
 		return err
-	} else if resp.StatusCode != http.StatusCreated {
+	} else if resp.StatusCode != http.StatusNoContent {
 		return parseRespErr(resp)
 	}
 	resp.Body.Close()
@@ -95,7 +96,7 @@ func (c *Client) GetPerson(ctx context.Context, id int64) (*internal.Person, err
 	resp, err := c.Do(req)
 	if err != nil {
 		return nil, err
-	} else if resp.StatusCode != http.StatusCreated {
+	} else if resp.StatusCode != http.StatusOK {
 		return nil, parseRespErr(resp)
 	}
 	defer resp.Body.Close()
@@ -108,16 +109,104 @@ func (c *Client) GetPerson(ctx context.Context, id int64) (*internal.Person, err
 	return &person, nil
 }
 
-func (c *Client) AddFriendship(context.Context, internal.Friendship) error {
+func (c *Client) AddFriendship(ctx context.Context, friendship internal.Friendship) error {
+	var buf *bytes.Buffer
+	if err := json.NewEncoder(buf).Encode(friendship); err != nil {
+		return err
+	}
 
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.URL+"/friendship",
+		buf,
+	)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-type", "application/json")
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return err
+	} else if resp.StatusCode != http.StatusNoContent {
+		return parseRespErr(resp)
+	}
+	resp.Body.Close()
+
+	return nil
 }
 
-func (c *Client) GetDepth(context.Context, int64, int64) (int, error) {
+func (c *Client) GetDepth(ctx context.Context, id1, id2 int64) (int, error) {
+	var buf *bytes.Buffer
+	if err := json.NewEncoder(buf).Encode(rest.GetDepthRequest{Id1: id1, Id2: id2}); err != nil {
+		return -1, err
+	}
 
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.URL+"/friendship/depth/"+fmt.Sprint(id1)+"/"+fmt.Sprint(id2),
+		buf,
+	)
+	if err != nil {
+		return -1, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-type", "application/json")
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return -1, err
+	} else if resp.StatusCode != http.StatusOK {
+		return -1, parseRespErr(resp)
+	}
+	defer resp.Body.Close()
+
+	var depth rest.GetDepthResponse
+	if err := json.NewDecoder(resp.Body).Decode(&depth); err != nil {
+		return -1, err
+	}
+
+	return depth.Depth, nil
 }
 
-func (c *Client) GetFriendship(context.Context, int64) (internal.Friendship, error) {
+func (c *Client) GetFriendship(ctx context.Context, id int64) (internal.Friendship, error) {
+	var buf *bytes.Buffer
+	if err := json.NewEncoder(buf).Encode(rest.GetFriendshipRequest{Id: id}); err != nil {
+		return internal.Friendship{}, err
+	}
 
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.URL+"/friendship/"+fmt.Sprint(id),
+		buf,
+	)
+	if err != nil {
+		return internal.Friendship{}, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-type", "application/json")
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return internal.Friendship{}, err
+	} else if resp.StatusCode != http.StatusOK {
+		return internal.Friendship{}, parseRespErr(resp)
+	}
+	defer resp.Body.Close()
+
+	var friendship internal.Friendship
+	if err := json.NewDecoder(resp.Body).Decode(&friendship); err != nil {
+		return friendship, err
+	}
+
+	return friendship, nil
 }
 
 // parseRespErr parses a json error from the response to a *internal.Error.
