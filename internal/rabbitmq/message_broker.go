@@ -1,7 +1,10 @@
 package rabbitmq
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"time"
 
 	"github.com/Lambels/relationer/internal"
 	"github.com/streadway/amqp"
@@ -30,5 +33,24 @@ func (s *RabbitMq) DeletedPerson(ctx context.Context, person *internal.Person) e
 }
 
 func (s *RabbitMq) pushMsg(ctx context.Context, routingKey string, val interface{}) error {
+	var buf *bytes.Buffer
+	if err := json.NewEncoder(buf).Encode(val); err != nil {
+		return err
+	}
 
+	if err := s.ch.Publish(
+		"relations",
+		routingKey,
+		false,
+		false,
+		amqp.Publishing{
+			AppId:       "rest-server",
+			ContentType: "application/json",
+			Body:        buf.Bytes(),
+			Timestamp:   time.Now(),
+		},
+	); err != nil {
+		return err
+	}
+	return nil
 }
