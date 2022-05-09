@@ -3,7 +3,6 @@ package graph
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -41,10 +40,10 @@ func NewGraphStore(db *sql.DB) *GraphStoreService {
 // should only be used once after initialization.
 func (s *GraphStoreService) Load() error {
 	if s == nil || s.repo == nil {
-		return errors.New("store is nil")
+		return internal.Errorf(internal.EINTERNAL, "store is nil")
 	}
 	if s.db == nil {
-		return errors.New("db is nil")
+		return internal.Errorf(internal.EINTERNAL, "db is nil")
 	}
 
 	// load data from db, full table scan.
@@ -109,12 +108,7 @@ func (s *GraphStoreService) RemovePerson(ctx context.Context, id int64) error {
 }
 
 func (s *GraphStoreService) GetPerson(ctx context.Context, id int64) (*internal.Person, error) {
-	person, err := s.getPerson(id)
-	if err != nil {
-		return nil, err
-	}
-
-	return person, nil
+	return s.getPerson(id)
 }
 
 // FindDepth uses bfs to find the depth distance between to people, if not related
@@ -140,7 +134,7 @@ func (s *GraphStoreService) GetDepth(ctx context.Context, first, second int64) (
 	}
 
 	if err := s.cache.Set(ctx, fmt.Sprintf("D%v%v", first, second), depth, 5*time.Minute); err != nil {
-		return depth, internal.WrapError(err, internal.EINTERNAL, "error while tring to set cache") // wrap error easy to check for cache error.
+		return depth, internal.WrapError(err, internal.EINTERNAL, "cache.Set") // wrap error easy to check for cache error.
 	}
 
 	return depth, nil
@@ -160,18 +154,22 @@ func (s *GraphStoreService) GetFriendship(ctx context.Context, id int64) (intern
 	}
 
 	s.mu.RLock()
+	defer s.mu.RUnlock()
 	friends := s.edges[pers.ID]
-	s.mu.RUnlock()
 
 	res.P1 = pers
 	res.With = friends
 
 	// set cache.
 	if err := s.cache.Set(ctx, fmt.Sprintf("F%v", id), res, 5*time.Second); err != nil {
-		return res, internal.WrapError(err, internal.EINTERNAL, "error while tring to set cache") // wrap error easy to check for cache error.
+		return res, internal.WrapError(err, internal.EINTERNAL, "cache.Set") // wrap error easy to check for cache error.
 	}
 
 	return res, nil
+}
+
+func (s *GraphStoreService) GetAll(ctx context.Context) ([]internal.Friendship, error) {
+	return s.getAll(ctx)
 }
 
 func (s *GraphStoreService) addPerson(p *internal.Person) {
@@ -200,7 +198,7 @@ func (s *GraphStoreService) getDepth(ctx context.Context, first, target int64) (
 	for {
 		select {
 		case <-ctx.Done():
-			return -1, ctx.Err()
+			return -1, internal.WrapError(ctx.Err(), internal.EINVALID, "ctx.Err")
 
 		default:
 		}
@@ -262,4 +260,26 @@ func (s *GraphStoreService) removePerson(id int64) {
 			break
 		}
 	}
+}
+
+func (s *GraphStoreService) getAll(ctx context.Context) ([]internal.Friendship, error) {
+	friendships := make([]internal.Friendship, 0)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, person := range s.nodes {
+		select {
+		case <-ctx.Done():
+			return friendships, internal.WrapError(ctx.Err(), internal.EINVALID, "ctx.Err")
+		default:
+		}
+
+		friends := s.edges[person.ID]
+		friendships = append(friendships, internal.Friendship{
+			P1:   person,
+			With: friends,
+		})
+	}
+
+	return friendships, nil
 }
