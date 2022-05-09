@@ -35,7 +35,7 @@ func (s *RabbitMq) DeletedPerson(ctx context.Context, person *internal.Person) e
 func (s *RabbitMq) pushMsg(ctx context.Context, routingKey string, val interface{}) error {
 	var buf *bytes.Buffer
 	if err := json.NewEncoder(buf).Encode(val); err != nil {
-		return err
+		return internal.WrapError(err, internal.EINTERNAL, "json.Encode")
 	}
 
 	if err := s.ch.Publish(
@@ -50,7 +50,7 @@ func (s *RabbitMq) pushMsg(ctx context.Context, routingKey string, val interface
 			Timestamp:   time.Now(),
 		},
 	); err != nil {
-		return err
+		return internal.WrapError(err, internal.EINTERNAL, "ch.Publish")
 	}
 	return nil
 }
