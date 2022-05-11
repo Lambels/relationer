@@ -45,6 +45,13 @@ func WrapError(origin error, code ECode, format string, a ...interface{}) error 
 	}
 }
 
+func WrapErrorNil(origin error, code ECode, format string, a ...interface{}) error {
+	if origin == nil {
+		return nil
+	}
+	return WrapError(origin, code, format, a...)
+}
+
 // Errorf formats a new error.
 func Errorf(code ECode, formant string, a ...interface{}) error {
 	return WrapError(nil, code, formant, a...)
