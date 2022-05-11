@@ -66,13 +66,54 @@ func (s *PostgreSqlStoreService) RemovePerson(ctx context.Context, id int64) err
 }
 
 func addPerson(ctx context.Context, tx *Tx, person *internal.Person) error {
+	person.CreatedAt = tx.now
 
+	if err := person.Validate(); err != nil {
+		return err
+	}
+
+	result, err := tx.ExecContext(ctx, `
+		INSERT INTO people (
+			name,
+			created_at,
+		) VALUES(?, ?)
+	`,
+		person.Name,
+		person.CreatedAt,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return err
+	}
+
+	person.ID = id
+	return nil
 }
 
 func addFriendship(ctx context.Context, tx *Tx, friendship internal.Friendship) error {
+	if err := friendship.Validate(); err != nil {
+		return err
+	}
 
+	_, err := tx.ExecContext(ctx, `
+		INSERT INTO friendships (
+			person1_id,
+			person2_id,
+		) VALUES (?, ?)
+	`,
+		friendship.P1,
+		friendship.With[0],
+	)
+
+	return err
 }
 
 func removePerson(ctx context.Context, tx *Tx, id int64) error {
-
+	_, err := tx.ExecContext(ctx, `DELETE FROM people WHERE id = ?`, id)
+	return err
 }
