@@ -5,6 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"time"
+
+	"github.com/Lambels/relationer/internal"
+	"github.com/jackc/pgerrcode"
+	"github.com/lib/pq"
 )
 
 type DB struct {
@@ -60,4 +64,20 @@ func (db *DB) BeginTX(ctx context.Context, opts *sql.TxOptions) (*Tx, error) {
 		Tx:  tx,
 		now: db.Now().UTC().Truncate(time.Second),
 	}, nil
+}
+
+func parsePostgreErr(in error) error {
+	var err *pq.Error
+	if !errors.As(in, &err) {
+		return internal.WrapErrorNil(in, internal.EINTERNAL, "couldnt parse error")
+	}
+
+	switch err.Code {
+	case pgerrcode.CaseNotFound:
+		return internal.WrapError(err, internal.ENOTFOUND, err.Error())
+	case pgerrcode.UniqueViolation:
+		return internal.WrapError(err, internal.ECONFLICT, err.Error())
+	default: // TODO: more error code cheking
+		return internal.WrapError(err, internal.EINTERNAL, err.Error())
+	}
 }
