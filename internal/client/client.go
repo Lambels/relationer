@@ -29,7 +29,12 @@ func (c *Client) AddPerson(ctx context.Context, person *internal.Person) error {
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.URL+"/person", buf)
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.URL+"/people",
+		buf,
+	)
 	if err != nil {
 		return err
 	}
@@ -39,7 +44,7 @@ func (c *Client) AddPerson(ctx context.Context, person *internal.Person) error {
 
 	resp, err := c.Do(req)
 	if err != nil {
-		return err
+		return internal.WrapError(err, internal.ECONFLICT, "c.Do")
 	} else if resp.StatusCode != http.StatusCreated {
 		return parseRespErr(resp)
 	}
@@ -52,16 +57,11 @@ func (c *Client) AddPerson(ctx context.Context, person *internal.Person) error {
 }
 
 func (c *Client) RemovePerson(ctx context.Context, id int64) error {
-	var buf *bytes.Buffer
-	if err := json.NewEncoder(buf).Encode(rest.RemovePersonRequest{Id: id}); err != nil {
-		return err
-	}
-
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodDelete,
-		c.URL+"/person/"+fmt.Sprint(id),
-		buf,
+		c.URL+"/people/"+fmt.Sprint(id),
+		nil,
 	)
 	if err != nil {
 		return err
@@ -72,19 +72,18 @@ func (c *Client) RemovePerson(ctx context.Context, id int64) error {
 
 	resp, err := c.Do(req)
 	if err != nil {
-		return err
+		return internal.WrapError(err, internal.ECONFLICT, "c.Do")
 	} else if resp.StatusCode != http.StatusNoContent {
 		return parseRespErr(resp)
 	}
-	resp.Body.Close()
-	return nil
+	return resp.Body.Close()
 }
 
 func (c *Client) GetPerson(ctx context.Context, id int64) (*internal.Person, error) {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		c.URL+"/person/"+fmt.Sprint(id),
+		c.URL+"/people/"+fmt.Sprint(id),
 		nil,
 	)
 	if err != nil {
@@ -95,7 +94,7 @@ func (c *Client) GetPerson(ctx context.Context, id int64) (*internal.Person, err
 
 	resp, err := c.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, internal.WrapError(err, internal.ECONFLICT, "c.Do")
 	} else if resp.StatusCode != http.StatusOK {
 		return nil, parseRespErr(resp)
 	}
@@ -112,7 +111,7 @@ func (c *Client) GetPerson(ctx context.Context, id int64) (*internal.Person, err
 func (c *Client) AddFriendship(ctx context.Context, friendship internal.Friendship) error {
 	var buf *bytes.Buffer
 	if err := json.NewEncoder(buf).Encode(friendship); err != nil {
-		return err
+		return internal.WrapError(err, internal.EINTERNAL, "json.Encode")
 	}
 
 	req, err := http.NewRequestWithContext(
@@ -130,26 +129,19 @@ func (c *Client) AddFriendship(ctx context.Context, friendship internal.Friendsh
 
 	resp, err := c.Do(req)
 	if err != nil {
-		return err
+		return internal.WrapError(err, internal.ECONFLICT, "c.Do")
 	} else if resp.StatusCode != http.StatusNoContent {
 		return parseRespErr(resp)
 	}
-	resp.Body.Close()
-
-	return nil
+	return resp.Body.Close()
 }
 
 func (c *Client) GetDepth(ctx context.Context, id1, id2 int64) (int, error) {
-	var buf *bytes.Buffer
-	if err := json.NewEncoder(buf).Encode(rest.GetDepthRequest{Id1: id1, Id2: id2}); err != nil {
-		return -1, err
-	}
-
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
 		c.URL+"/friendship/depth/"+fmt.Sprint(id1)+"/"+fmt.Sprint(id2),
-		buf,
+		nil,
 	)
 	if err != nil {
 		return -1, err
@@ -160,7 +152,7 @@ func (c *Client) GetDepth(ctx context.Context, id1, id2 int64) (int, error) {
 
 	resp, err := c.Do(req)
 	if err != nil {
-		return -1, err
+		return -1, internal.WrapError(err, internal.ECONFLICT, "c.Do")
 	} else if resp.StatusCode != http.StatusOK {
 		return -1, parseRespErr(resp)
 	}
@@ -175,16 +167,11 @@ func (c *Client) GetDepth(ctx context.Context, id1, id2 int64) (int, error) {
 }
 
 func (c *Client) GetFriendship(ctx context.Context, id int64) (internal.Friendship, error) {
-	var buf *bytes.Buffer
-	if err := json.NewEncoder(buf).Encode(rest.GetFriendshipRequest{Id: id}); err != nil {
-		return internal.Friendship{}, err
-	}
-
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
 		c.URL+"/friendship/"+fmt.Sprint(id),
-		buf,
+		nil,
 	)
 	if err != nil {
 		return internal.Friendship{}, err
@@ -195,7 +182,7 @@ func (c *Client) GetFriendship(ctx context.Context, id int64) (internal.Friendsh
 
 	resp, err := c.Do(req)
 	if err != nil {
-		return internal.Friendship{}, err
+		return internal.Friendship{}, internal.WrapError(err, internal.ECONFLICT, "c.Do")
 	} else if resp.StatusCode != http.StatusOK {
 		return internal.Friendship{}, parseRespErr(resp)
 	}
