@@ -84,6 +84,14 @@ func ErrorCode(err error) ECode {
 	return EINTERNAL
 }
 
+func StatusCodeFromECode(code ECode) int {
+	v, ok := codes[code]
+	if !ok {
+		return http.StatusInternalServerError
+	}
+	return v
+}
+
 // ECodeFromStatusCode is a helper function to map a http status code to a error
 //
 // if code not found: returns EINTERNAL
