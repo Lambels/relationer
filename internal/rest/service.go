@@ -123,7 +123,11 @@ func (h *HandlerService) getPerson(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HandlerService) getAll(w http.ResponseWriter, r *http.Request) {
-	data := h.store.GetAll(r.Context())
+	data, err := h.store.GetAll(r.Context())
+	if err != nil {
+		sendErrorResponse(w, err)
+		return
+	}
 
 	sendResponse(w, data, http.StatusOK)
 }
