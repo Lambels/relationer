@@ -33,6 +33,10 @@ func NewDB(dsn string) *DB {
 	return db
 }
 
+func (db *DB) DB() *sql.DB {
+	return db.db
+}
+
 func (db *DB) Open() (err error) {
 	if db.DSN == "" {
 		return errors.New("dsn required")
