@@ -30,5 +30,5 @@ type GraphStore interface {
 
 	GetPerson(context.Context, int64) (*internal.Person, error)
 
-	GetAll(context.Context) []internal.Friendship
+	GetAll(context.Context) ([]internal.Friendship, error)
 }
