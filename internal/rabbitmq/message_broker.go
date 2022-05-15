@@ -28,13 +28,13 @@ func (s *RabbitMq) CreatedFriendship(ctx context.Context, friendship internal.Fr
 	return s.pushMsg(ctx, "friendship.created", friendship)
 }
 
-func (s *RabbitMq) DeletedPerson(ctx context.Context, person *internal.Person) error {
-	return s.pushMsg(ctx, "person.deleted", person)
+func (s *RabbitMq) DeletedPerson(ctx context.Context, id int64) error {
+	return s.pushMsg(ctx, "person.deleted", map[string]int64{"id": id})
 }
 
 func (s *RabbitMq) pushMsg(ctx context.Context, routingKey string, val interface{}) error {
-	var buf *bytes.Buffer
-	if err := json.NewEncoder(buf).Encode(val); err != nil {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(val); err != nil {
 		return internal.WrapError(err, internal.EINTERNAL, "json.Encode")
 	}
 
