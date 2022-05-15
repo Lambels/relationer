@@ -24,8 +24,8 @@ func NewClient(client http.Client, base string) *Client {
 }
 
 func (c *Client) AddPerson(ctx context.Context, person *internal.Person) error {
-	var buf *bytes.Buffer
-	if err := json.NewEncoder(buf).Encode(person); err != nil {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(&person); err != nil {
 		return err
 	}
 
@@ -33,7 +33,7 @@ func (c *Client) AddPerson(ctx context.Context, person *internal.Person) error {
 		ctx,
 		http.MethodPost,
 		c.URL+"/people",
-		buf,
+		&buf,
 	)
 	if err != nil {
 		return err
@@ -109,8 +109,8 @@ func (c *Client) GetPerson(ctx context.Context, id int64) (*internal.Person, err
 }
 
 func (c *Client) AddFriendship(ctx context.Context, friendship internal.Friendship) error {
-	var buf *bytes.Buffer
-	if err := json.NewEncoder(buf).Encode(friendship); err != nil {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(friendship); err != nil {
 		return internal.WrapError(err, internal.EINTERNAL, "json.Encode")
 	}
 
@@ -118,7 +118,7 @@ func (c *Client) AddFriendship(ctx context.Context, friendship internal.Friendsh
 		ctx,
 		http.MethodPost,
 		c.URL+"/friendship",
-		buf,
+		&buf,
 	)
 	if err != nil {
 		return err
@@ -189,6 +189,36 @@ func (c *Client) GetFriendship(ctx context.Context, id int64) (internal.Friendsh
 	defer resp.Body.Close()
 
 	var friendship internal.Friendship
+	if err := json.NewDecoder(resp.Body).Decode(&friendship); err != nil {
+		return friendship, err
+	}
+
+	return friendship, nil
+}
+
+func (c *Client) GetAll(ctx context.Context) ([]internal.Friendship, error) {
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		c.URL+"/friendship/",
+		nil,
+	)
+	if err != nil {
+		return []internal.Friendship{}, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-type", "application/json")
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return []internal.Friendship{}, internal.WrapError(err, internal.ECONFLICT, "c.Do")
+	} else if resp.StatusCode != http.StatusOK {
+		return []internal.Friendship{}, parseRespErr(resp)
+	}
+	defer resp.Body.Close()
+
+	var friendship []internal.Friendship
 	if err := json.NewDecoder(resp.Body).Decode(&friendship); err != nil {
 		return friendship, err
 	}
