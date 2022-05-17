@@ -27,8 +27,10 @@ type GraphStoreService struct {
 }
 
 // New initializes a new store.
-func NewGraphStore(db *sql.DB) *GraphStoreService {
+func NewGraphStore(db *sql.DB, repo service.Store, cache service.Cache) *GraphStoreService {
 	return &GraphStoreService{
+		repo:  repo,
+		cache: cache,
 		db:    db,
 		nodes: make([]*internal.Person, 0),
 		edges: make(map[int64][]*internal.Person),
