@@ -72,22 +72,11 @@ func addPerson(ctx context.Context, tx *Tx, person *internal.Person) error {
 		return err
 	}
 
-	result, err := tx.ExecContext(ctx, `
-		INSERT INTO people (
-			name,
-			created_at,
-		) VALUES(?, ?)
-	`,
+	var id int64
+	if err := tx.QueryRowContext(ctx, `INSERT INTO people (name, created_at) VALUES ($1, $2) RETURNING id`,
 		person.Name,
 		person.CreatedAt,
-	)
-
-	if err != nil {
-		return err
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
+	).Scan(&id); err != nil {
 		return err
 	}
 
