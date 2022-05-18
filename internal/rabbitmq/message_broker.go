@@ -39,7 +39,7 @@ func (s *RabbitMq) pushMsg(ctx context.Context, routingKey string, val interface
 	}
 
 	if err := s.ch.Publish(
-		"relations",
+		"relationer",
 		routingKey,
 		false,
 		false,
