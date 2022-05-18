@@ -80,7 +80,11 @@ func run(ctx context.Context, conf *Config) {
 		}
 
 		store = postgresql.NewPostgresqlStore(db, cache)
-		gStore = graph.NewGraphStore(db.DB(), store, cache)
+		graph := graph.NewGraphStore(db.DB(), store, cache)
+		if err := graph.Load(ctx); err != nil {
+			log.Fatalf("%v\n", err)
+		}
+		gStore = graph
 	} else {
 		gStore = graph.NewGraphStore(nil, nil, cache)
 		store = noop.NewNoopStore()
