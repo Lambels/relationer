@@ -24,6 +24,14 @@ func NewHandlerService(store service.GraphStore, broker service.MessageBroker) *
 }
 
 func (h *HandlerService) RegisterRouter(mux chi.Router) {
+	// people
+	mux.Get("/people", h.getAll)
+	mux.Post("/people", h.addPerson)
+
+	// friendship
+	mux.Post("/friendship", h.addFriendship)
+	mux.Get("/friendship/depth/{id1}/{id2}", h.getDepth)
+
 	// id to use parser middleware.
 	mux.Route("/", func(r chi.Router) {
 		r.Use(idContextValidator)
@@ -32,14 +40,6 @@ func (h *HandlerService) RegisterRouter(mux chi.Router) {
 		r.Delete("/people/{id}", h.removePerson)
 		r.Get("/friendship/{id}", h.getFriendship)
 	})
-
-	// people
-	mux.Get("/people", h.getAll)
-	mux.Post("/people", h.addPerson)
-
-	// friendship
-	mux.Post("/frienship", h.addFriendship)
-	mux.Get("/friendship/depth/{id1}/{id2}", h.getDepth)
 }
 
 func (h *HandlerService) addPerson(w http.ResponseWriter, r *http.Request) {
