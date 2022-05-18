@@ -130,7 +130,7 @@ func (c *Client) AddFriendship(ctx context.Context, friendship internal.Friendsh
 	resp, err := c.Do(req)
 	if err != nil {
 		return internal.WrapError(err, internal.ECONFLICT, "c.Do")
-	} else if resp.StatusCode != http.StatusNoContent {
+	} else if resp.StatusCode != http.StatusCreated {
 		return parseRespErr(resp)
 	}
 	return resp.Body.Close()
@@ -139,7 +139,7 @@ func (c *Client) AddFriendship(ctx context.Context, friendship internal.Friendsh
 func (c *Client) GetDepth(ctx context.Context, id1, id2 int64) (int, error) {
 	req, err := http.NewRequestWithContext(
 		ctx,
-		http.MethodPost,
+		http.MethodGet,
 		c.URL+"/friendship/depth/"+fmt.Sprint(id1)+"/"+fmt.Sprint(id2),
 		nil,
 	)
