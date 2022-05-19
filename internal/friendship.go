@@ -2,8 +2,8 @@ package internal
 
 // Friendship represents a friendship from the perspective of P1.
 type Friendship struct {
-	P1   *Person   `json:"p1"`
-	With []*Person `json:"with"`
+	P1   *Person `json:"p1"`
+	With []int64 `json:"with"`
 }
 
 func (f Friendship) Validate() error {
