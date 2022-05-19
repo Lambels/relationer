@@ -20,7 +20,7 @@ type GraphStoreService struct {
 
 	// graph properties.
 	nodes []*internal.Person
-	edges map[int64][]*internal.Person
+	edges map[int64][]int64
 
 	once sync.Once
 	mu   sync.RWMutex
@@ -33,14 +33,14 @@ func NewGraphStore(db *sql.DB, repo service.Store, cache service.Cache) *GraphSt
 		cache: cache,
 		db:    db,
 		nodes: make([]*internal.Person, 0),
-		edges: make(map[int64][]*internal.Person),
+		edges: make(map[int64][]int64),
 	}
 }
 
 // Load, syncs the store with the database.
 //
 // should only be used once after initialization.
-func (s *GraphStoreService) Load() error {
+func (s *GraphStoreService) Load(ctx context.Context) error {
 	if s == nil || s.repo == nil {
 		return internal.Errorf(internal.EINTERNAL, "store is nil")
 	}
@@ -49,13 +49,54 @@ func (s *GraphStoreService) Load() error {
 	}
 
 	// load data from db, full table scan.
+	var doErr error
 	s.once.Do(func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
-		// load many to many relationship from db.
+		// load relationships.
+		rows, err := s.db.QueryContext(ctx, `
+			SELECT people.id, people.name, people.created_at, friendships.person2_id FROM people
+			FULL JOIN friendships ON people.id = friendships.person1_id
+			ORDER BY 1`,
+		)
+		if err != nil {
+			doErr = err
+			return
+		}
+		defer rows.Close()
+
+		people := make([]*internal.Person, 1) // skip if check on each itteration
+		people[0] = &internal.Person{ID: -1}
+		relations := make(map[int64][]int64, 0)
+		for rows.Next() {
+			var person internal.Person
+			var friendID sql.NullInt64
+
+			if err := rows.Scan(
+				&person.ID,
+				&person.Name,
+				&person.CreatedAt,
+				&friendID,
+			); err != nil {
+				doErr = err
+				return
+			}
+
+			if people[len(people)-1].ID != person.ID {
+				people = append(people, &person)
+			}
+
+			if friendID.Valid {
+				relations[person.ID] = append(relations[person.ID], friendID.Int64)
+			}
+		}
+
+		s.nodes = people
+		s.edges = relations
+		doErr = nil
 	})
-	return nil
+	return doErr
 }
 
 func (s *GraphStoreService) AddPerson(ctx context.Context, person *internal.Person) error {
@@ -75,17 +116,12 @@ func (s *GraphStoreService) AddFriendship(ctx context.Context, friendship intern
 		return internal.Errorf(internal.ECONFLICT, "provided friendship should only be with one person")
 	}
 
-	// possibly skip table scan.
-	if _, err := s.getDepth(ctx, friendship.P1.ID, friendship.With[0].ID); err != nil {
-		return internal.Errorf(internal.ECONFLICT, "%v and %v are already friends", friendship.P1, friendship.With[0])
-	}
-
 	if err := s.repo.AddFriendship(ctx, friendship); err != nil {
 		return err
 	}
 
 	s.mu.Lock()
-	s.addFriendship(friendship.P1, friendship.With[0])
+	s.addFriendship(friendship.P1.ID, friendship.With[0])
 	s.mu.Unlock()
 	return nil
 }
@@ -101,8 +137,8 @@ func (s *GraphStoreService) RemovePerson(ctx context.Context, id int64) error {
 
 	s.mu.Lock()
 	friends := s.edges[id]
-	for _, friend := range friends {
-		s.removeFriendship(id, friend.ID) // unlink everyone linked with current person.
+	for _, id := range friends {
+		s.removeFriendship(id, id) // unlink everyone linked with current person.
 	}
 	s.removePerson(id)
 	s.mu.Unlock()
@@ -178,8 +214,8 @@ func (s *GraphStoreService) addPerson(p *internal.Person) {
 	s.nodes = append(s.nodes, p)
 }
 
-func (s *GraphStoreService) addFriendship(p1, p2 *internal.Person) {
-	s.edges[p1.ID] = append(s.edges[p1.ID], p2)
+func (s *GraphStoreService) addFriendship(p1, p2 int64) {
+	s.edges[p1] = append(s.edges[p1], p2)
 }
 
 func (s *GraphStoreService) getDepth(ctx context.Context, first, target int64) (int, error) {
@@ -216,8 +252,8 @@ func (s *GraphStoreService) getDepth(ctx context.Context, first, target int64) (
 
 		for i := 0; i < len(near); i++ {
 			j := near[i]
-			if !visited[j.ID] {
-				queue = append(queue, j.ID)
+			if !visited[j] {
+				queue = append(queue, j)
 			}
 		}
 
@@ -244,7 +280,7 @@ func (s *GraphStoreService) getPerson(id int64) (*internal.Person, error) {
 func (s *GraphStoreService) removeFriendship(p1, p2 int64) {
 	friends := s.edges[p1]
 	for i, friend := range friends {
-		if friend.ID == p2 {
+		if friend == p2 {
 			friends[i] = friends[len(friends)-1]
 			friends = friends[:len(friends)-1]
 			break
