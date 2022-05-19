@@ -73,7 +73,12 @@ func addPerson(ctx context.Context, tx *Tx, person *internal.Person) error {
 	}
 
 	var id int64
-	if err := tx.QueryRowContext(ctx, `INSERT INTO people (name, created_at) VALUES ($1, $2) RETURNING id`,
+	if err := tx.QueryRowContext(ctx, `
+	INSERT INTO people (
+		name,
+		created_at
+	) VALUES ($1, $2)
+	RETURNING id`,
 		person.Name,
 		person.CreatedAt,
 	).Scan(&id); err != nil {
@@ -90,12 +95,12 @@ func addFriendship(ctx context.Context, tx *Tx, friendship internal.Friendship) 
 	}
 
 	_, err := tx.ExecContext(ctx, `
-		INSERT INTO friendships (
-			person1_id,
-			person2_id,
-		) VALUES (?, ?)
+	INSERT INTO friendships (
+		person1_id,
+		person2_id
+	) VALUES ($1, $2)
 	`,
-		friendship.P1,
+		friendship.P1.ID,
 		friendship.With[0],
 	)
 
