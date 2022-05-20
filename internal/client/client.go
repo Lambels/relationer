@@ -169,7 +169,7 @@ func (c *Client) GetDepth(ctx context.Context, id1, id2 int64) (int, error) {
 func (c *Client) GetFriendship(ctx context.Context, id int64) (internal.Friendship, error) {
 	req, err := http.NewRequestWithContext(
 		ctx,
-		http.MethodPost,
+		http.MethodGet,
 		c.URL+"/friendship/"+fmt.Sprint(id),
 		nil,
 	)
