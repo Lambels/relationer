@@ -7,7 +7,12 @@ import (
 	"os"
 	"time"
 
+	addfriendship "github.com/Lambels/relationer/cmd/cli/pkg/add_friendship"
 	addperson "github.com/Lambels/relationer/cmd/cli/pkg/add_person"
+	getdepth "github.com/Lambels/relationer/cmd/cli/pkg/get_depth"
+	getfriendship "github.com/Lambels/relationer/cmd/cli/pkg/get_friendship"
+	getperson "github.com/Lambels/relationer/cmd/cli/pkg/get_person"
+	"github.com/Lambels/relationer/cmd/cli/pkg/listen"
 	"github.com/Lambels/relationer/cmd/cli/pkg/root"
 	"github.com/Lambels/relationer/internal/client"
 	"github.com/peterbourgon/ff/v3/ffcli"
@@ -17,10 +22,20 @@ func main() {
 	var (
 		rootCmd, rootConf = root.New()
 		createPerson      = addperson.New(rootConf, os.Stdout)
+		createFriendship  = addfriendship.New(rootConf, os.Stdout)
+		getDepth          = getdepth.New(rootConf, os.Stdout)
+		getFriendship     = getfriendship.New(rootConf, os.Stdout)
+		getPerson         = getperson.New(rootConf, os.Stdout)
+		listen            = listen.New(rootConf, os.Stdout)
 	)
 
 	rootCmd.Subcommands = []*ffcli.Command{
 		createPerson,
+		createFriendship,
+		getDepth,
+		getFriendship,
+		getPerson,
+		listen,
 	}
 
 	if err := rootCmd.Parse(os.Args[1:]); err != nil {
