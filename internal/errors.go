@@ -7,7 +7,7 @@ import (
 )
 
 // ECode represents an error code in the system.
-type ECode uint
+type ECode uint8
 
 // Error codes which map good to http errors.
 const (
