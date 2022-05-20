@@ -3,6 +3,7 @@ package rest
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -33,7 +34,7 @@ func (h *HandlerService) RegisterRouter(mux chi.Router) {
 	mux.Get("/friendship/depth/{id1}/{id2}", h.getDepth)
 
 	// id to use parser middleware.
-	mux.Route("/", func(r chi.Router) {
+	mux.Group(func(r chi.Router) {
 		r.Use(idContextValidator)
 
 		r.Get("/people/{id}", h.getPerson)
@@ -99,7 +100,9 @@ func (h *HandlerService) removePerson(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HandlerService) getFriendship(w http.ResponseWriter, r *http.Request) {
+	log.Println("Hello??")
 	id := r.Context().Value(idKey{}).(int64)
+	log.Println(id)
 
 	friendship, err := h.store.GetFriendship(r.Context(), id)
 	if err != nil {
@@ -156,7 +159,7 @@ func (h *HandlerService) getDepth(w http.ResponseWriter, r *http.Request) {
 func idContextValidator(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		idStr := chi.URLParam(r, "id")
-		id, err := strconv.Atoi(idStr)
+		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
 			sendErrorResponse(w, internal.Errorf(internal.ECONFLICT, "invalid id"))
 			return
