@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/Lambels/relationer/cmd/cli/pkg/root"
 	"github.com/Lambels/relationer/internal"
@@ -39,12 +40,14 @@ func (c *Config) Exec(ctx context.Context, args []string) error {
 	user := &internal.Person{
 		Name: name,
 	}
+	start := time.Now()
 	if err := c.rootConfig.Client.AddPerson(ctx, user); err != nil {
 		return err
 	}
 
 	if c.rootConfig.Verbose {
 		fmt.Fprintf(c.out, "created person with id %q at %v OK\n", user.ID, user.CreatedAt)
+		fmt.Fprintf(c.out, "Process took %v \n", time.Since(start))
 	}
 
 	return nil
