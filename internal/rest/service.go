@@ -3,7 +3,6 @@ package rest
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 
@@ -100,9 +99,7 @@ func (h *HandlerService) removePerson(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HandlerService) getFriendship(w http.ResponseWriter, r *http.Request) {
-	log.Println("Hello??")
 	id := r.Context().Value(idKey{}).(int64)
-	log.Println(id)
 
 	friendship, err := h.store.GetFriendship(r.Context(), id)
 	if err != nil {
