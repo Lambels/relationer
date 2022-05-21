@@ -149,10 +149,13 @@ func (s session) Close() error {
 
 // redial continously tries to redial URL.
 func (c *Config) redial(ctx context.Context, URL string) <-chan session {
-	comm := make(chan session, 1)
+	comm := make(chan session, 0)
 
 	go func() {
 		for {
+			if c.rootConfig.Verbose {
+				fmt.Fprintf(c.out, "(re)dial to %v\n", URL)
+			}
 			conn, err := amqp.Dial(URL)
 			if err != nil {
 				fmt.Fprintf(c.out, "amqp.Dial: %v", err)
