@@ -63,7 +63,7 @@ $ server -bk-addr rabbitmq-url -cache-addr redis-url -db-addr postgres-dsn
 To kill the server `Ctrl-C`
 
 ## Cli
-If you have a relationer server running you can now interface with it via the cli binary add all its sub commands.
+If you have a relationer server running, you can now interface with it via the cli binary and all its sub commands.
 ### Create two persons and have them linked via a mutual friendship:
 ```
 $ cli -v add-person Lambels
