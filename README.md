@@ -43,8 +43,11 @@ FLAGS
 
 # Quickstart
 > Must already have postgres instance running
+
 > Must already have redis instance running
+
 > Must already have rabbitmq instance running
+
 > Have `$GOPATH` in yout path
 
 Build the relationer project by cloning the repo then run:
