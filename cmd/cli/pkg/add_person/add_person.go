@@ -46,7 +46,7 @@ func (c *Config) Exec(ctx context.Context, args []string) error {
 	}
 
 	if c.rootConfig.Verbose {
-		fmt.Fprintf(c.out, "created person with id %q at %v OK\n", user.ID, user.CreatedAt)
+		fmt.Fprintf(c.out, "created person with id %v at %v OK\n", user.ID, user.CreatedAt)
 		fmt.Fprintf(c.out, "Process took %v \n", time.Since(start))
 	}
 
