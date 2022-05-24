@@ -2,6 +2,8 @@ package client
 
 import (
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/streadway/amqp"
 )
@@ -10,16 +12,22 @@ type consumer struct {
 	*amqp.Connection
 	*amqp.Channel
 
-	done   chan struct{}
-	mu     sync.Mutex
-	notify []chan *Message // own custom type
+	private  bool
+	isClosed atomic.Value // used to differentiate between failed connection or forced shutdown to stop redialing.
+	done     chan struct{}
+	mu       sync.Mutex
+	index    uint
+	idCount  bool
+	notify   map[uint]chan<- *Message
 }
 
-func newConsumer(URL string, bindings []string) (*consumer, error) {
+// TODO: add conf struct
+func newConsumer(URL string, bindings []string, reconnect bool) (*consumer, error) {
 	cons := &consumer{
 		done:   make(chan struct{}),
-		notify: make([]chan *Message, 0),
+		notify: make(map[uint]chan<- *Message),
 	}
+	cons.isClosed.Store(false)
 
 	var err error
 	cons.Connection, err = amqp.Dial(URL)
@@ -69,13 +77,74 @@ func newConsumer(URL string, bindings []string) (*consumer, error) {
 		}
 	}
 
+	del, err := cons.Channel.Consume(
+		q.Name, // queue
+		"",     // consumer
+		true,   // auto ack
+		false,  // exclusive
+		false,  // no local
+		false,  // no wait
+		nil,    // args
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	if reconnect {
+		go cons.redial()
+	}
+	go cons.handle(del)
+
 	return cons, nil
 }
 
-func (c consumer) shutdown() error {
+func (c *consumer) redial(every time.Duration) {
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		<-ticker.C
+		if c.isClosed.Load().(bool) {
+			return
+		}
+		select {
+		case <-c.done:
+
+		}
+	}
+}
+
+func (c *consumer) attachRecv(chan<- *Message) {
+
+}
+
+func (c *consumer) removeRecv(chan<- *Message) {
+
+}
+
+func (c *consumer) handle(del <-chan amqp.Delivery) {
+	for d := range del {
+		msg := &Message{
+			Type: d.Type,
+			Data: d.Body,
+		}
+		c.share(msg)
+	}
+	c.done <- struct{}{}
+}
+
+func (c *consumer) share(msg *Message) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, c := range c.notify {
+		c <- msg
+	}
+}
+
+func (c *consumer) shutdown() error {
 	if c.Connection == nil {
 		return nil
 	}
+	c.isClosed.Store(true)
 
 	// channel.Cancel
 	return nil
