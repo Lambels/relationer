@@ -46,7 +46,7 @@ func NewClient(conf *ClientConfig) *Client {
 	return c
 }
 
-func (c *Client) Listen(ctx context.Context) <-chan *Message {
+func (c *Client) ListenDetached(ctx context.Context) <-chan *Message {
 	return c.listen(ctx, true)
 }
 
