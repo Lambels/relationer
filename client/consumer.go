@@ -8,50 +8,50 @@ import (
 	"github.com/streadway/amqp"
 )
 
+type ConsumerConfig struct {
+	URL         string
+	BindingKeys []string
+
+	Reconnect bool
+	Pulse     time.Duration // pulse should only be set if reconnect is true.
+}
+
 type consumer struct {
 	*amqp.Connection
 	*amqp.Channel
 
-	private  bool
 	isClosed atomic.Value // used to differentiate between failed connection or forced shutdown to stop redialing.
 	done     chan struct{}
+	conf     *ConsumerConfig
 	mu       sync.Mutex
 	index    uint
-	idCount  bool
+	idCount  uint
 	notify   map[uint]chan<- *Message
 }
 
-// TODO: add conf struct
-func newConsumer(URL string, bindings []string, reconnect bool) (*consumer, error) {
+func newConsumer(conf *ConsumerConfig) (*consumer, error) {
 	cons := &consumer{
 		done:   make(chan struct{}),
 		notify: make(map[uint]chan<- *Message),
 	}
 	cons.isClosed.Store(false)
 
-	var err error
-	cons.Connection, err = amqp.Dial(URL)
-	if err != nil {
+	// set consumer configuration.
+	if conf == nil {
+		cons.conf = &ConsumerConfig{
+			URL:         "amqp://guest:guest@localhost:5672",
+			BindingKeys: []string{"#"},
+		}
+	} else {
+		cons.conf = conf
+	}
+
+	// establish the amqp connection + channel.
+	if err := establishConnection(cons); err != nil {
 		return nil, err
 	}
 
-	cons.Channel, err = cons.Connection.Channel()
-	if err != nil {
-		return nil, err
-	}
-
-	if err = cons.Channel.ExchangeDeclarePassive(
-		"relationer", // name
-		"topic",      // type
-		true,         // durable
-		false,        // auto-deleted
-		false,        // internal
-		false,        // no-wait
-		nil,
-	); err != nil {
-		return nil, err
-	}
-
+	// create a new random name queue.
 	q, err := cons.Channel.QueueDeclare(
 		"",    // name
 		false, // durable
@@ -64,8 +64,8 @@ func newConsumer(URL string, bindings []string, reconnect bool) (*consumer, erro
 		return nil, err
 	}
 
-	// bind ...
-	for _, bind := range bindings {
+	// bind queue.
+	for _, bind := range cons.conf.BindingKeys {
 		if err := cons.Channel.QueueBind(
 			q.Name,       // queue name
 			bind,         // routing key
@@ -77,6 +77,7 @@ func newConsumer(URL string, bindings []string, reconnect bool) (*consumer, erro
 		}
 	}
 
+	// start consuming.
 	del, err := cons.Channel.Consume(
 		q.Name, // queue
 		"",     // consumer
@@ -90,7 +91,7 @@ func newConsumer(URL string, bindings []string, reconnect bool) (*consumer, erro
 		return nil, err
 	}
 
-	if reconnect {
+	if cons.conf.Reconnect {
 		go cons.redial()
 	}
 	go cons.handle(del)
@@ -98,26 +99,91 @@ func newConsumer(URL string, bindings []string, reconnect bool) (*consumer, erro
 	return cons, nil
 }
 
-func (c *consumer) redial(every time.Duration) {
-	ticker := time.NewTicker(every)
+func (c *consumer) redial() {
+	ticker := time.NewTicker(c.conf.Pulse)
 	defer ticker.Stop()
 	for {
 		<-ticker.C
+		// always check if c.isClosed flag set and not consumer the done channel.
 		if c.isClosed.Load().(bool) {
 			return
 		}
 		select {
-		case <-c.done:
+		case <-c.done: // past c.handle() exited
+			if err := establishConnection(c); err != nil {
+				// TODO: figure out how to signal failure
+				return
+			}
 
+			// create a new random name queue.
+			q, err := c.Channel.QueueDeclare(
+				"",    // name
+				false, // durable
+				false, // delete when unused
+				true,  // exclusive
+				false, // no-wait
+				nil,   // arguments
+			)
+			if err != nil {
+				// TODO: figure out how to signal failure
+				return
+			}
+
+			// bind queue.
+			for _, bind := range c.conf.BindingKeys {
+				if err := c.Channel.QueueBind(
+					q.Name,       // queue name
+					bind,         // routing key
+					"relationer", // exchange
+					false,
+					nil,
+				); err != nil {
+					// TODO: figure out how to signal failure
+					return
+				}
+			}
+
+			// start consuming.
+			del, err := c.Channel.Consume(
+				q.Name, // queue
+				"",     // consumer
+				true,   // auto ack
+				false,  // exclusive
+				false,  // no local
+				false,  // no wait
+				nil,    // args
+			)
+			if err != nil {
+				// TODO: figure out how to signal failure
+				return
+			}
+
+			// start new handler.
+			go c.handle(del)
 		}
 	}
 }
 
-func (c *consumer) attachRecv(chan<- *Message) {
-
+// TODO: maybe return error to signal removal from slice in client.
+// TODO: error field? to track any redial error.
+func (c *consumer) attachRecv(recv chan<- *Message) uint {
+	c.mu.Lock()
+	id := c.idCount
+	c.notify[id] = recv
+	c.idCount++
+	c.mu.Unlock()
+	return id
 }
 
-func (c *consumer) removeRecv(chan<- *Message) {
+func (c *consumer) removeRecv(id uint, isRoot bool) {
+	c.mu.Lock()
+	delete(c.notify, id)
+	if isRoot || len(c.notify) == 0 {
+		c.mu.Unlock()
+		c.shutdown()
+		return
+	}
+	c.mu.Unlock()
 
 }
 
@@ -147,5 +213,32 @@ func (c *consumer) shutdown() error {
 	c.isClosed.Store(true)
 
 	// channel.Cancel
+	return nil
+}
+
+func establishConnection(cons *consumer) error {
+	var err error
+	cons.Connection, err = amqp.Dial(cons.conf.URL)
+	if err != nil {
+		return err
+	}
+
+	cons.Channel, err = cons.Connection.Channel()
+	if err != nil {
+		return err
+	}
+
+	if err = cons.Channel.ExchangeDeclarePassive(
+		"relationer", // name
+		"topic",      // type
+		true,         // durable
+		false,        // auto-deleted
+		false,        // internal
+		false,        // no-wait
+		nil,
+	); err != nil {
+		return err
+	}
+
 	return nil
 }
