@@ -39,3 +39,7 @@ func New() (*ffcli.Command, *Config) {
 		Exec:       cfg.Exec,
 	}, &cfg
 }
+
+func parseError(err error, message string) error {
+	return nil
+}
