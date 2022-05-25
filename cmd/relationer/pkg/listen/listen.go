@@ -9,7 +9,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/Lambels/relationer/cmd/cli/pkg/root"
+	"github.com/Lambels/relationer/cmd/relationer/pkg/root"
 	"github.com/Lambels/relationer/internal"
 	"github.com/Lambels/relationer/internal/rabbitmq"
 	"github.com/peterbourgon/ff/v3/ffcli"

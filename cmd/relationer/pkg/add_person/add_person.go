@@ -7,7 +7,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/Lambels/relationer/cmd/cli/pkg/root"
+	"github.com/Lambels/relationer/cmd/relationer/pkg/root"
 	"github.com/Lambels/relationer/internal"
 	"github.com/peterbourgon/ff/v3/ffcli"
 )
