@@ -200,7 +200,7 @@ func (c *Client) GetAll(ctx context.Context) ([]internal.Friendship, error) {
 	req, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodGet,
-		c.URL+"/friendship/",
+		c.URL+"/people/",
 		nil,
 	)
 	if err != nil {
