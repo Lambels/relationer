@@ -16,6 +16,9 @@ type ConsumerConfig struct {
 	Pulse     time.Duration // pulse should only be set if reconnect is true.
 }
 
+// consumer represents a TCP connection to a message broker.
+// a consumer may have multiple recievers attached to it, yet not recommended
+// if a TCP connection gets killed you may want your other recievers un-harmed.
 type consumer struct {
 	*amqp.Connection
 	*amqp.Channel
@@ -24,15 +27,15 @@ type consumer struct {
 	done     chan struct{}
 	conf     *ConsumerConfig
 	mu       sync.Mutex
-	index    uint
-	idCount  uint
-	notify   map[uint]chan<- *Message
+	index    int
+	idCount  int
+	notify   map[int]chan<- *Message
 }
 
 func newConsumer(conf *ConsumerConfig) (*consumer, error) {
 	cons := &consumer{
 		done:   make(chan struct{}),
-		notify: make(map[uint]chan<- *Message),
+		notify: make(map[int]chan<- *Message),
 	}
 	cons.isClosed.Store(false)
 
@@ -160,13 +163,14 @@ func (c *consumer) redial() {
 
 			// start new handler.
 			go c.handle(del)
+		default:
 		}
 	}
 }
 
 // TODO: maybe return error to signal removal from slice in client.
 // TODO: error field? to track any redial error.
-func (c *consumer) attachRecv(recv chan<- *Message) uint {
+func (c *consumer) attachRecv(recv chan<- *Message) int {
 	c.mu.Lock()
 	id := c.idCount
 	c.notify[id] = recv
@@ -175,7 +179,7 @@ func (c *consumer) attachRecv(recv chan<- *Message) uint {
 	return id
 }
 
-func (c *consumer) removeRecv(id uint, isRoot bool) {
+func (c *consumer) removeRecv(id int, isRoot bool) {
 	c.mu.Lock()
 	delete(c.notify, id)
 	if isRoot || len(c.notify) == 0 {
@@ -195,7 +199,7 @@ func (c *consumer) handle(del <-chan amqp.Delivery) {
 		}
 		c.share(msg)
 	}
-	c.done <- struct{}{}
+	c.done <- struct{}{} // TODO: do something with this signal
 }
 
 func (c *consumer) share(msg *Message) {
