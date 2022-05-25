@@ -18,7 +18,7 @@ const (
 type Client struct {
 	client service.GraphStore
 
-	bindings []string
+	consConf *ConsumerConfig
 
 	mu        sync.Mutex // protects bottom fields
 	consumers []*consumer
@@ -26,34 +26,33 @@ type Client struct {
 }
 
 type ClientConfig struct {
-	URL      string
-	Timeout  time.Duration
-	Bindings []string
+	URL     string
+	Timeout time.Duration
+
+	ConsConf *ConsumerConfig
 }
 
 func NewClient(conf *ClientConfig) *Client {
 	c := &Client{
 		consumers: make([]*consumer, 0),
-		bindings:  make([]string, 0),
 	}
 	if conf == nil {
 		c.client = rClient.NewClient(http.Client{Timeout: DefaultTimeout}, DefaultURL)
-		c.bindings = append(c.bindings, "#")
 	} else {
 		c.client = rClient.NewClient(http.Client{Timeout: conf.Timeout}, conf.URL)
-		c.bindings = append(c.bindings, conf.Bindings...)
+		c.consConf = conf.ConsConf
 	}
 	return c
 }
 
 func (c *Client) ListenDetached(ctx context.Context) <-chan *Message {
-	return c.listen(ctx, true)
-}
-
-func (c *Client) ListenAttached(ctx context.Context) <-chan *Message {
 	return c.listen(ctx, false)
 }
 
-func (c *Client) listen(ctx context.Context, independant bool) <-chan *Message {
+func (c *Client) ListenAttached(ctx context.Context) <-chan *Message {
+	return c.listen(ctx, true)
+}
+
+func (c *Client) listen(ctx context.Context, attached bool) <-chan *Message {
 
 }
