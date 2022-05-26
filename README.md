@@ -2,6 +2,7 @@
 This project provides a real-time interface to view highly-customisable relationships (graph relationships) between people. The relationer server produces messages which are sent to a centralised message broker to be consumend by you on either: the relationer cli recieving point, provided frontend, or your own customisable app.
 
 # Get Started
+**Using realtioner with golang? try the [golang client](https://github.com/Lambels/relationer/tree/main/client)**
 ## Binary Packages
 All the final binaries are under the `./cmd` folder:
 - `./cmd/relationer-server` - the relationer server binary
