@@ -21,9 +21,9 @@ type Client struct {
 
 	consConf *ConsumerConfig
 
-	mu        sync.Mutex // protects bottom fields
-	consumers []*consumer
-	lastx     int
+	mu           sync.Mutex // protects bottom fields
+	consumerPool []*consumer
+	lastx        int
 }
 
 type ClientConfig struct {
@@ -35,7 +35,7 @@ type ClientConfig struct {
 
 func NewClient(conf *ClientConfig) *Client {
 	c := &Client{
-		consumers: make([]*consumer, 0),
+		consumerPool: make([]*consumer, 0),
 	}
 	if conf == nil {
 		c.client = rClient.NewClient(http.Client{Timeout: DefaultTimeout}, DefaultURL)
@@ -50,7 +50,7 @@ func NewClient(conf *ClientConfig) *Client {
 func (c *Client) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for _, cons := range c.consumers {
+	for _, cons := range c.consumerPool {
 		if err := cons.shutdown(); err != nil {
 			return err
 		}
@@ -130,9 +130,9 @@ func (c *Client) asignConsumerReciever(recv chan *Message, root bool) (*consumer
 			return nil, -1, err
 		}
 
-		c.consumers = append(c.consumers, cons)
+		c.consumerPool = append(c.consumerPool, cons)
 	} else {
-		if len(c.consumers) == 0 { // no current consumers.
+		if len(c.consumerPool) == 0 { // no current consumers.
 			// create the first consumer and just attach the reciever to it.
 			var err error
 			cons, err = newConsumer(c.consConf)
@@ -140,20 +140,20 @@ func (c *Client) asignConsumerReciever(recv chan *Message, root bool) (*consumer
 				return nil, -1, err
 			}
 
-			c.consumers = append(c.consumers, cons)
+			c.consumerPool = append(c.consumerPool, cons)
 		} else { // add reciever to existing consumer.
-			if c.lastx >= len(c.consumers) { // if index over slice length start from the begining.
+			if c.lastx >= len(c.consumerPool) { // if index over slice length start from the begining.
 				c.lastx = 0
 			}
 
-			cons = c.consumers[c.lastx] // get attaching consumer
-			c.lastx++                   // TODO: change pointer only when 100 % sure that recv attached
+			cons = c.consumerPool[c.lastx] // get attaching consumer
+			c.lastx++                      // TODO: change pointer only when 100 % sure that recv attached
 		}
 	}
 
 	id, err := cons.attachRecv(recv)
 	if err != nil { // dead?
-		c.consumers = append(c.consumers[:c.lastx], c.consumers[c.lastx+1:]...) // remove.
+		c.consumerPool = append(c.consumerPool[:c.lastx], c.consumerPool[c.lastx+1:]...) // remove.
 		c.asignConsumerReciever(recv, root)
 	}
 	return cons, id, nil
