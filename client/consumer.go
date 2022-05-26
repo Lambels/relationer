@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,7 +28,6 @@ type consumer struct {
 	done     chan struct{}
 	conf     *ConsumerConfig
 	mu       sync.Mutex
-	index    int
 	idCount  int
 	notify   map[int]chan<- *Message
 }
@@ -114,7 +114,8 @@ func (c *consumer) redial() {
 		select {
 		case <-c.done: // past c.handle() exited
 			if err := establishConnection(c); err != nil {
-				// TODO: figure out how to signal failure
+				c.isClosed.Store(true)
+				c.closeRecievers()
 				return
 			}
 
@@ -128,7 +129,8 @@ func (c *consumer) redial() {
 				nil,   // arguments
 			)
 			if err != nil {
-				// TODO: figure out how to signal failure
+				c.isClosed.Store(true)
+				c.closeRecievers()
 				return
 			}
 
@@ -141,7 +143,8 @@ func (c *consumer) redial() {
 					false,
 					nil,
 				); err != nil {
-					// TODO: figure out how to signal failure
+					c.isClosed.Store(true)
+					c.closeRecievers()
 					return
 				}
 			}
@@ -157,7 +160,8 @@ func (c *consumer) redial() {
 				nil,    // args
 			)
 			if err != nil {
-				// TODO: figure out how to signal failure
+				c.isClosed.Store(true)
+				c.closeRecievers()
 				return
 			}
 
@@ -168,27 +172,30 @@ func (c *consumer) redial() {
 	}
 }
 
-// TODO: maybe return error to signal removal from slice in client.
-// TODO: error field? to track any redial error.
-func (c *consumer) attachRecv(recv chan<- *Message) int {
+func (c *consumer) attachRecv(recv chan<- *Message) (int, error) {
+	// consumer dead, signal to remove from consumers slice.
+	if c.isClosed.Load().(bool) {
+		return -1, fmt.Errorf("consumer closed")
+	}
+
 	c.mu.Lock()
 	id := c.idCount
 	c.notify[id] = recv
 	c.idCount++
 	c.mu.Unlock()
-	return id
+	return id, nil
 }
 
-func (c *consumer) removeRecv(id int, isRoot bool) {
+func (c *consumer) removeRecv(id int, isRoot bool) error {
 	c.mu.Lock()
 	delete(c.notify, id)
 	if isRoot || len(c.notify) == 0 {
 		c.mu.Unlock()
 		c.shutdown()
-		return
+		return fmt.Errorf("consumer empty")
 	}
 	c.mu.Unlock()
-
+	return nil
 }
 
 func (c *consumer) handle(del <-chan amqp.Delivery) {
@@ -199,7 +206,13 @@ func (c *consumer) handle(del <-chan amqp.Delivery) {
 		}
 		c.share(msg)
 	}
-	c.done <- struct{}{} // TODO: do something with this signal
+	if !c.conf.Reconnect && !c.isClosed.Load().(bool) { // abnormal close.
+		// connection already closed.
+		// no need to go through shutdown method.
+		c.closeRecievers()
+		c.isClosed.Store(true)
+	}
+	c.done <- struct{}{}
 }
 
 func (c *consumer) share(msg *Message) {
@@ -211,13 +224,29 @@ func (c *consumer) share(msg *Message) {
 }
 
 func (c *consumer) shutdown() error {
-	if c.Connection == nil {
+	if c.Connection == nil || c.isClosed.Load().(bool) {
 		return nil
 	}
 	c.isClosed.Store(true)
 
-	// channel.Cancel
+	if err := c.Connection.Close(); err != nil {
+		return err
+	}
+
+	c.closeRecievers()
+
+	<-c.done
+
 	return nil
+}
+
+func (c *consumer) closeRecievers() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for _, recv := range c.notify {
+		close(recv)
+	}
 }
 
 func establishConnection(cons *consumer) error {
