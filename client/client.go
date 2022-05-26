@@ -103,39 +103,10 @@ func (c *Client) listen(ctx context.Context, root bool) (<-chan *Message, error)
 	recv := make(chan *Message)
 
 	c.mu.Lock()
-	var cons *consumer
-	if root { // create separate connection (consumer) for root reciever.
-		var err error
-		cons, err = newConsumer(c.consConf)
-		if err != nil {
-			c.mu.Unlock()
-			return nil, err
-		}
-
-		c.consumers = append(c.consumers, cons)
-	} else {
-		if len(c.consumers) == 0 { // no current consumers.
-			// create the first consumer and just attach the reciever to it.
-			var err error
-			cons, err = newConsumer(c.consConf)
-			if err != nil {
-				c.mu.Unlock()
-				return nil, err
-			}
-
-			c.consumers = append(c.consumers, cons)
-		} else { // add reciever to existing consumer.
-			if c.lastx > len(c.consumers) { // if index over slice length start from the begining.
-				c.lastx = 0
-			}
-
-			// TODO: add error checking for attaching reciever to healthy consumer?
-			// TODO: remove unhealthy consumer from slice if found.
-			cons = c.consumers[c.lastx] // get attaching consumer
-			c.lastx++
-		}
+	cons, id, err := c.asignConsumerReciever(recv, root)
+	if err != nil {
+		return nil, err
 	}
-	id := cons.attachRecv(recv)
 	c.mu.Unlock()
 
 	go func() {
@@ -148,4 +119,42 @@ func (c *Client) listen(ctx context.Context, root bool) (<-chan *Message, error)
 	}()
 
 	return recv, nil
+}
+
+func (c *Client) asignConsumerReciever(recv chan *Message, root bool) (*consumer, int, error) {
+	var cons *consumer
+	if root { // create separate connection (consumer) for root reciever.
+		var err error
+		cons, err = newConsumer(c.consConf)
+		if err != nil {
+			return nil, -1, err
+		}
+
+		c.consumers = append(c.consumers, cons)
+	} else {
+		if len(c.consumers) == 0 { // no current consumers.
+			// create the first consumer and just attach the reciever to it.
+			var err error
+			cons, err = newConsumer(c.consConf)
+			if err != nil {
+				return nil, -1, err
+			}
+
+			c.consumers = append(c.consumers, cons)
+		} else { // add reciever to existing consumer.
+			if c.lastx >= len(c.consumers) { // if index over slice length start from the begining.
+				c.lastx = 0
+			}
+
+			cons = c.consumers[c.lastx] // get attaching consumer
+			c.lastx++                   // TODO: change pointer only when 100 % sure that recv attached
+		}
+	}
+
+	id, err := cons.attachRecv(recv)
+	if err != nil { // dead?
+		c.consumers = append(c.consumers[:c.lastx], c.consumers[c.lastx+1:]...) // remove.
+		c.asignConsumerReciever(recv, root)
+	}
+	return cons, id, nil
 }
