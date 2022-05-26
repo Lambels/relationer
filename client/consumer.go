@@ -9,12 +9,21 @@ import (
 	"github.com/streadway/amqp"
 )
 
+const DefaultBrokerURL = "amqp://guest:guest@localhost:5672"
+
+// ConsumerConfig is used for the creation of consumers, each client has one consumer config
+// which is used to create all consumers via the: StartListenDetached and StartListenAttached
+// methods.
 type ConsumerConfig struct {
-	URL         string
+	// The URL of the broker (rabbitmq) - default: amqp://guest:guest@localhost:5672
+	URL string
+	// Binding keys to the exchange - defualt: # (all)
 	BindingKeys []string
 
+	// Used to indicate if connections should reconnect after closing abnormally.
 	Reconnect bool
-	Pulse     time.Duration // pulse should only be set if reconnect is true.
+	// Used as interval to check the health of current connection. (reconnect if needed or close conn)
+	Pulse time.Duration // pulse should only be set if reconnect is true.
 }
 
 // consumer represents a TCP connection to a message broker.
@@ -42,7 +51,7 @@ func newConsumer(conf *ConsumerConfig) (*consumer, error) {
 	// set consumer configuration.
 	if conf == nil {
 		cons.conf = &ConsumerConfig{
-			URL:         "amqp://guest:guest@localhost:5672",
+			URL:         DefaultBrokerURL,
 			BindingKeys: []string{"#"},
 		}
 	} else {
