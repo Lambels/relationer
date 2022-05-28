@@ -43,7 +43,7 @@ func main() {
 	}
 
 	client := client.NewClient(
-		http.Client{Timeout: 5 * time.Second},
+		&http.Client{Timeout: 5 * time.Second},
 		rootConf.Path,
 	)
 
