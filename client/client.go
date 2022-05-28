@@ -1,7 +1,9 @@
 package client
 
+// TODO: Add more examples in readme.
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -71,6 +73,7 @@ func (c *Client) Close() error {
 	return nil
 }
 
+// TODO: parse errors // unwrap from internal client.
 // REST -------------------------------------------------------------------------------------
 
 // GetDepth gets the depth between two nodes (including the endpoint nodes).
@@ -119,6 +122,7 @@ func (c *Client) RemovePerson(ctx context.Context, id int64) error {
 	return c.client.RemovePerson(ctx, id)
 }
 
+// TODO: add exclude from pool consumer.
 // Listen -----------------------------------------------------------------------------------
 
 // StartListenDetached will start a separate connection to the message-broker (rabbitmq)
@@ -147,11 +151,50 @@ func (c *Client) StartListenDetached(ctx context.Context) (<-chan *Message, erro
 // is if the root reciever (reciever created with StartListenDetached) is killed or an error happens
 // in the connection.
 //
+// Grouping - group multiple recievers to one root reciever (controlled):
+//
+// call (*Client).StartListenDetached(ctx) followed by synchronised
+// (*Client).StartListenAttached(ctx, true) , these followed calls will skip the round-robin like
+// load balancer algorithm and attach all the recievers to the last consumer (created by (*Client).StartListenDetached(ctx))
+// giving you grouped consumer.
+//
 // Attention: A recv attached to a connection can be closed at any time! You can bundle up
 // recievers with syncronised calls to the client making one root reciever and many dependant
 // recievers.
-func (c *Client) StartListenAttached(ctx context.Context) (<-chan *Message, error) {
+func (c *Client) StartListenAttached(ctx context.Context, last bool) (<-chan *Message, error) {
+	if last {
+		return c.listenLast(ctx)
+	}
 	return c.listen(ctx, false)
+}
+
+func (c *Client) listenLast(ctx context.Context) (<-chan *Message, error) {
+	c.mu.Lock()
+	if len(c.consumerPool) == 0 {
+		return nil, fmt.Errorf("no active consumers.")
+	}
+
+	recv := make(chan *Message)
+	cons := c.consumerPool[len(c.consumerPool)-1]
+	id, err := cons.attachRecv(recv)
+	if err != nil { // dead?
+		c.consumerPool = c.consumerPool[:len(c.consumerPool)-1]
+		return nil, err
+	}
+	c.mu.Unlock()
+
+	go func() {
+		select {
+		case <-ctx.Done():
+		}
+
+		if err := cons.removeRecv(id, false); err != nil { // return early, close channel 2 times will cause a panic.
+			return
+		}
+		close(recv) // close chan.
+	}()
+
+	return recv, nil
 }
 
 func (c *Client) listen(ctx context.Context, root bool) (<-chan *Message, error) {
@@ -204,7 +247,7 @@ func (c *Client) asignConsumerReciever(recv chan *Message, root bool) (*consumer
 			}
 
 			cons = c.consumerPool[c.lastx] // get attaching consumer
-			c.lastx++                      // TODO: change pointer only when 100 % sure that recv attached
+			c.lastx++
 		}
 	}
 
