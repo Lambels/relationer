@@ -14,12 +14,12 @@ import (
 
 // Client is an http client which implements the internal.GraphStore
 type Client struct {
-	http.Client
+	*http.Client
 
 	URL string
 }
 
-func NewClient(client http.Client, base string) *Client {
+func NewClient(client *http.Client, base string) *Client {
 	return &Client{client, base}
 }
 
