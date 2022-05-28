@@ -36,7 +36,7 @@ type ClientConfig struct {
 	// The relationer server URL - default: http://localhost:8080
 	URL string
 	// The http client used by the REST client - defualt: http client with 5 second timeout
-	Client http.Client
+	Client *http.Client
 
 	// The consumer factory configuration used by the client to generate all consumers.
 	ConsumerConfig *ConsumerConfig
@@ -51,7 +51,7 @@ func New(conf *ClientConfig) *Client {
 		consumerPool: make([]*consumer, 0),
 	}
 	if conf == nil {
-		c.client = rClient.NewClient(http.Client{Timeout: DefaultTimeout}, DefaultURL)
+		c.client = rClient.NewClient(&http.Client{Timeout: DefaultTimeout}, DefaultURL)
 	} else {
 		c.client = rClient.NewClient(conf.Client, conf.URL)
 		c.consConf = conf.ConsumerConfig
