@@ -122,7 +122,6 @@ func (c *Client) RemovePerson(ctx context.Context, id int64) error {
 	return c.client.RemovePerson(ctx, id)
 }
 
-// TODO: add exclude from pool consumer.
 // Listen -----------------------------------------------------------------------------------
 
 // StartListenDetached will start a separate connection to the message-broker (rabbitmq)
