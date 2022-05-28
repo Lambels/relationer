@@ -197,12 +197,12 @@ func (c *consumer) attachRecv(recv chan<- *Message) (int, error) {
 
 func (c *consumer) removeRecv(id int, isRoot bool) error {
 	c.mu.Lock()
-	delete(c.notify, id)
 	if isRoot || len(c.notify) == 0 {
 		c.mu.Unlock()
 		c.shutdown()
 		return fmt.Errorf("consumer empty")
 	}
+	delete(c.notify, id)
 	c.mu.Unlock()
 	return nil
 }
