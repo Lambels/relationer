@@ -1,6 +1,6 @@
 package client
 
-// TODO: Add more examples in readme.
+//TODO: Add more examples in readme.
 import (
 	"context"
 	"fmt"
@@ -170,6 +170,7 @@ func (c *Client) StartListenAttached(ctx context.Context, last bool) (<-chan *Me
 func (c *Client) listenLast(ctx context.Context) (<-chan *Message, error) {
 	c.mu.Lock()
 	if len(c.consumerPool) == 0 {
+		c.mu.Unlock()
 		return nil, fmt.Errorf("no active consumers.")
 	}
 
