@@ -1,0 +1,52 @@
+version: '3.9'
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '8080:8080'
+    restart: unless-stopped
+    depends_on:
+      - migrate
+      - redis
+      - db
+      - rabbitmq
+    networks:
+      - backend
+
+  redis:
+    image: redis:6.2-alpine
+    restart: unless-stopped
+    command: redis-server --save 20 1 --loglevel warning
+    volumes: 
+      - redis:/data
+    networks:
+      - backend
+  
+  migrate:
+    command: ['sh', '/scripts/start.sh']
+    volumes:
+      - ./scripts:/scripts
+    depends_on:
+      - db
+    networks:
+      - backend
+
+  db:
+    image: postgres:14.1-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    networks:
+      - backend
+
+volumes:
+  redis:
+    driver: local
+  db:
+    driver: local
+
+networks:
+  backend:
