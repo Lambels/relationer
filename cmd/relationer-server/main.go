@@ -41,7 +41,7 @@ func main() {
 	// flags.
 	flag.BoolVar(&conf.backup, "backup", true, "use a backup datastore")
 	flag.StringVar(&conf.serverAddr, "serv-addr", ":8080", "address of the server")
-	flag.StringVar(&conf.databaseAddr, "db-addr", "postgres://patrickarvatu:password@localhost/relationer?sslmode=disable", "dns of the database")
+	flag.StringVar(&conf.databaseAddr, "db-addr", "postgres://postgres:postgres@db/relationer?sslmode=disable", "dns of the database")
 	flag.StringVar(&conf.brokerAddr, "bk-addr", "amqp://guest:guest@localhost:5672", "address of the broker")
 	flag.StringVar(&conf.cacheAddr, "cache-addr", "localhost:6379", "address of the cache")
 	flag.Parse()
