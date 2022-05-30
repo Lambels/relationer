@@ -120,7 +120,7 @@ func TestCtxCancelDetachedAll(t *testing.T) {
 func waitRecvClose(recv <-chan *Message) <-chan struct{} {
 	ch := make(chan struct{})
 	go func() {
-		for _ = range recv {
+		for range recv {
 		}
 
 		ch <- struct{}{}
