@@ -14,11 +14,11 @@ Usage of relationer-server:
   -backup
         use a backup datastore (default true)
   -bk-addr string
-        address of the broker (default "amqp://guest:guest@localhost:5672")
+        address of the broker (default "amqp://guest:guest@rabbitmq:5672")
   -cache-addr string
-        address of the cache (default "localhost:6379")
+        address of the cache (default "redis:6379")
   -db-addr string
-        dns of the database (default "postgres://username:password@localhost/relationer?sslmode=disable")
+        dns of the database (default "postgres://postgres:postgres@database/relationer?sslmode=disable")
   -serv-addr string
         address of the server (default ":8080")
 ```
@@ -101,3 +101,14 @@ subscribed and ready to recieve...
 
 **Commands: cli -> relationer and server -> relationer-server**
 ![demo giphy](demo.gif)
+
+# Get Started (Docker)
+Clone the repo and have docker installed on your machine.
+
+Run in the root of the project directory:
+```
+docker-compose up --build
+```
+When the relationer container is up you should have a accessable relationer server on `:8080` and a rabbitmq instance on `:5672` with the management server on `:15672`
+
+You can now interact with this relationer server through convensional means such as the `relationer` binary or golang client.
