@@ -56,33 +56,84 @@ package main
 import (
 	"context"
 	"log"
-	"time"
 
 	"github.com/Lambels/relationer/client"
 )
 
 func main() {
 	c := client.NewClient(nil)
-
+    
+    // close will make sure that it will tear any connections and close any consumers left behind.
+	defer c.Close()
+    
     // start a new detached listener.
 	recv, err := c.ListenDetached(context.Background())
 	if err != nil {
 		log.Fatal(err)
 	}
-
-    // close will make sure that it will tear any connections and close any consumers left behind.
-	defer c.Close()
-
+    
     // loop over messages.
-	go func() {
+	go func() { 
         log.Println("Started listening...")
 		for msg := range recv1 {
 			log.Printf("[%v]: %v\n", msg.Type, msg.Data)
 		}
 	}()
-
+    
     log.Println("Ctrl-C to stop listening.")
 	select {}
 }
+```
+## Client listening (attached):
+```go
+package main
 
+import (
+	"context"
+	"log"
+	"time"
+
+	"github.com/Lambels/relationer/client"
+)
+
+func logMessages(recv <-chan *client.Message) {
+    go func() {
+        log.Println("Started listening...")
+		for msg := range recv1 {
+			log.Printf("[%v]: %v\n", msg.Type, msg.Data)
+		}
+    }()
+}
+
+func main() {
+	c := client.NewClient(nil)
+    
+    // close will make sure that it will tear any connections and close any consumers left behind.
+	defer c.Close()
+    
+    ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+    defer cancel()
+
+    // start a new detached listener with a timeout context.
+	recv, err := c.ListenDetached(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+    logMessages(recv)
+    
+    for i := 0; i < 4; i++ {    
+        // start a new reciever without creating a new connection to the rabbitmq server.
+        // the true parameter will attach the reciever strictly to the last connection added
+        // and skip the load balancing algorithm.
+        recv, err := c.ListenAttached(context.Background(), true)
+	    if err != nil {
+		    log.Fatal(err)
+	    }
+        logMessages(recv)
+    }
+        
+    // the resulting connections to the rabbitmq server will be one. (detached listener)
+    log.Println("Ctrl-C to stop listening.")
+	select {}
+}
 ```
