@@ -63,7 +63,7 @@ client.New(&client.ClientConfig{
 ```
 
 ### ConsumerConfig:
-When in reconnecting state separate ticking go routine which sleeps in intervals of `Pulse` checks the health of the consumer, if the connection is closed it will attempt a redial or close the consumer if the redial fails.
+When in reconnecting state a separate ticking go routine starts which sleeps in intervals of `Pulse` checks the health of the consumer, if the connection is closed it will attempt a redial or close the consumer if the redial fails. Set a non 0 value for Pulse to indicate a reconnecting state.
 ```go
 // to use the default value for the consumer config pass nil to ConsumerConfig.
 client.New(&client.ClientConfig{
@@ -72,7 +72,6 @@ client.New(&client.ClientConfig{
     ConsumerConfig: &client.ConsumerConfig{
         URL: "amqp://guest:guest@localhost:8080" // default value - amqp://guest:guest@localhost:5672
         BindingKeys: []string{"person.created", "person.deleted"} // default value - "#" (all messages)
-        Reconnect: true, // default value - false
         Pulse: 5 * time.Second, // default value - 0
     },
 })
