@@ -20,10 +20,8 @@ type ConsumerConfig struct {
 	// Binding keys to the exchange - defualt: # (all)
 	BindingKeys []string
 
-	// Used to indicate if connections should reconnect after closing abnormally.
-	Reconnect bool
-	// Used as interval to check the health of current connection. (reconnect if needed or close conn)
-	Pulse time.Duration // pulse should only be set if reconnect is true.
+	// Used as timeout to check the health of current connection. (reconnect if needed or close conn)
+	Pulse time.Duration
 }
 
 // consumer represents a TCP connection to a message broker.
@@ -53,6 +51,7 @@ func newConsumer(conf *ConsumerConfig) (*consumer, error) {
 		cons.conf = &ConsumerConfig{
 			URL:         DefaultBrokerURL,
 			BindingKeys: []string{"#"},
+			Pulse:       0,
 		}
 	} else {
 		cons.conf = conf
@@ -103,7 +102,7 @@ func newConsumer(conf *ConsumerConfig) (*consumer, error) {
 		return nil, err
 	}
 
-	if cons.conf.Reconnect {
+	if cons.conf.Pulse != 0 {
 		go cons.redial()
 	}
 	go cons.handle(del)
@@ -116,7 +115,7 @@ func (c *consumer) redial() {
 	defer ticker.Stop()
 	for {
 		<-ticker.C
-		// always check if c.isClosed flag set and not consumer the done channel.
+		// always check if c.isClosed flag set and steal the done value.
 		if c.isClosed.Load().(bool) {
 			return
 		}
@@ -215,7 +214,7 @@ func (c *consumer) handle(del <-chan amqp.Delivery) {
 		}
 		c.share(msg)
 	}
-	if !c.conf.Reconnect && !c.isClosed.Load().(bool) { // abnormal close.
+	if c.conf.Pulse == 0 && !c.isClosed.Load().(bool) { // the connection is closed and cant be recovered.
 		// connection already closed.
 		// no need to go through shutdown method.
 		c.closeRecievers()
@@ -237,12 +236,11 @@ func (c *consumer) shutdown() error {
 		return nil
 	}
 	c.isClosed.Store(true)
+	defer c.closeRecievers()
 
 	if err := c.Connection.Close(); err != nil {
 		return err
 	}
-
-	c.closeRecievers()
 
 	<-c.done
 
