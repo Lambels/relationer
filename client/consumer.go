@@ -41,7 +41,7 @@ type consumer struct {
 
 func newConsumer(conf *ConsumerConfig) (*consumer, error) {
 	cons := &consumer{
-		done:   make(chan struct{}),
+		done:   make(chan struct{}, 1),
 		notify: make(map[int]chan<- *Message),
 	}
 	cons.isClosed.Store(false)
@@ -58,7 +58,7 @@ func newConsumer(conf *ConsumerConfig) (*consumer, error) {
 	}
 
 	// establish the amqp connection + channel.
-	if err := establishConnection(cons); err != nil {
+	if err := cons.establishConnection(); err != nil {
 		return nil, err
 	}
 
@@ -121,7 +121,7 @@ func (c *consumer) redial() {
 		}
 		select {
 		case <-c.done: // past c.handle() exited
-			if err := establishConnection(c); err != nil {
+			if err := c.establishConnection(); err != nil {
 				c.isClosed.Store(true)
 				c.closeRecievers()
 				return
@@ -220,6 +220,8 @@ func (c *consumer) handle(del <-chan amqp.Delivery) {
 		c.closeRecievers()
 		c.isClosed.Store(true)
 	}
+
+	// no need for select, buffered channel.
 	c.done <- struct{}{}
 }
 
@@ -256,19 +258,19 @@ func (c *consumer) closeRecievers() {
 	}
 }
 
-func establishConnection(cons *consumer) error {
+func (c *consumer) establishConnection() error {
 	var err error
-	cons.Connection, err = amqp.Dial(cons.conf.URL)
+	c.Connection, err = amqp.Dial(c.conf.URL)
 	if err != nil {
 		return err
 	}
 
-	cons.Channel, err = cons.Connection.Channel()
+	c.Channel, err = c.Connection.Channel()
 	if err != nil {
 		return err
 	}
 
-	if err = cons.Channel.ExchangeDeclarePassive(
+	if err = c.Channel.ExchangeDeclarePassive(
 		"relationer", // name
 		"topic",      // type
 		true,         // durable
