@@ -45,6 +45,7 @@ type ClientConfig struct {
 // New creates a new relationer client with the provided config.
 //
 // To use the default config run
+//
 //	client.New(nil)
 func New(conf *ClientConfig) *Client {
 	c := &Client{
@@ -129,7 +130,9 @@ func (c *Client) RemovePerson(ctx context.Context, id int64) error {
 //
 // canceling the context provided to this function call will destroy the whole rabbitmq connection taking
 // away with it the initial subscribed channel and any other attached channels with
+//
 //	StartListenAttached()
+//
 // this way of listening to the messages is recommanded as separate connections for each
 // recieving channel will make recievers more safe and independant.
 func (c *Client) StartListenDetached(ctx context.Context) (<-chan *Message, error) {
@@ -171,7 +174,7 @@ func (c *Client) listenLast(ctx context.Context) (<-chan *Message, error) {
 	c.mu.Lock()
 	if len(c.consumerPool) == 0 {
 		c.mu.Unlock()
-		return nil, fmt.Errorf("no active consumers.")
+		return nil, fmt.Errorf("no active consumers")
 	}
 
 	recv := make(chan *Message)
@@ -179,19 +182,14 @@ func (c *Client) listenLast(ctx context.Context) (<-chan *Message, error) {
 	id, err := cons.attachRecv(recv)
 	if err != nil { // dead?
 		c.consumerPool = c.consumerPool[:len(c.consumerPool)-1]
+		c.mu.Unlock()
 		return nil, err
 	}
 	c.mu.Unlock()
 
 	go func() {
-		select {
-		case <-ctx.Done():
-		}
-
-		if err := cons.removeRecv(id, false); err != nil { // return early, close channel 2 times will cause a panic.
-			return
-		}
-		close(recv) // close chan.
+		<-ctx.Done()
+		cons.removeRecv(id, false)
 	}()
 
 	return recv, nil
@@ -208,14 +206,8 @@ func (c *Client) listen(ctx context.Context, root bool) (<-chan *Message, error)
 	c.mu.Unlock()
 
 	go func() {
-		select {
-		case <-ctx.Done():
-		}
-
-		if err := cons.removeRecv(id, root); err != nil { // return early, close channel 2 times will cause a panic.
-			return
-		}
-		close(recv) // close chan.
+		<-ctx.Done()
+		cons.removeRecv(id, root)
 	}()
 
 	return recv, nil
