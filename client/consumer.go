@@ -122,7 +122,6 @@ func (c *consumer) redial() {
 		select {
 		case <-c.done: // past c.handle() exited
 			if err := c.establishConnection(); err != nil {
-				c.isClosed.Store(true)
 				c.closeRecievers()
 				return
 			}
@@ -137,7 +136,6 @@ func (c *consumer) redial() {
 				nil,   // arguments
 			)
 			if err != nil {
-				c.isClosed.Store(true)
 				c.closeRecievers()
 				return
 			}
@@ -151,7 +149,6 @@ func (c *consumer) redial() {
 					false,
 					nil,
 				); err != nil {
-					c.isClosed.Store(true)
 					c.closeRecievers()
 					return
 				}
@@ -168,7 +165,6 @@ func (c *consumer) redial() {
 				nil,    // args
 			)
 			if err != nil {
-				c.isClosed.Store(true)
 				c.closeRecievers()
 				return
 			}
@@ -181,7 +177,7 @@ func (c *consumer) redial() {
 }
 
 func (c *consumer) attachRecv(recv chan<- *Message) (int, error) {
-	// consumer dead, signal to remove from consumers slice.
+	// consumer dead, signal to remove from consumers pool.
 	if c.isClosed.Load().(bool) {
 		return -1, fmt.Errorf("consumer closed")
 	}
@@ -194,16 +190,28 @@ func (c *consumer) attachRecv(recv chan<- *Message) (int, error) {
 	return id, nil
 }
 
-func (c *consumer) removeRecv(id int, isRoot bool) error {
-	c.mu.Lock()
-	if isRoot || len(c.notify) == 0 {
-		c.mu.Unlock()
-		c.shutdown()
-		return fmt.Errorf("consumer empty")
+func (c *consumer) removeRecv(id int, isRoot bool) {
+	// isClosed is associated with all the channels being closed.
+	// so closing the channel will cause a panic (chan closed 2 times)
+	if c.isClosed.Load().(bool) {
+		return
 	}
+
+	// if reciever isRoot then call shutdown which tears connection
+	// along side all reciever channels.
+	if isRoot {
+		c.shutdown()
+		return
+	}
+
+	c.mu.Lock()
+	// close channel, we are sure that its in notify as removeRecv can only be called after
+	// a successfull enqueue.
+	// the only way the channel cant be present is if the consumer is closed which is handeled
+	// above.
+	close(c.notify[id])
 	delete(c.notify, id)
 	c.mu.Unlock()
-	return nil
 }
 
 func (c *consumer) handle(del <-chan amqp.Delivery) {
@@ -218,7 +226,7 @@ func (c *consumer) handle(del <-chan amqp.Delivery) {
 		// connection already closed.
 		// no need to go through shutdown method.
 		c.closeRecievers()
-		c.isClosed.Store(true)
+		return
 	}
 
 	// no need for select, buffered channel.
@@ -237,23 +245,22 @@ func (c *consumer) shutdown() error {
 	if c.Connection == nil || c.isClosed.Load().(bool) {
 		return nil
 	}
-	c.isClosed.Store(true)
-	defer c.closeRecievers()
-
+	c.closeRecievers()
 	if err := c.Connection.Close(); err != nil {
 		return err
 	}
-
 	<-c.done
-
 	return nil
 }
 
+// closeRecievers is to be called when the connection is already dead.
 func (c *consumer) closeRecievers() {
+	c.isClosed.Store(true)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for _, recv := range c.notify {
+	for key, recv := range c.notify {
+		delete(c.notify, key)
 		close(recv)
 	}
 }
